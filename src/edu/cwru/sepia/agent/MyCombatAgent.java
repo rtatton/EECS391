@@ -1,9 +1,8 @@
-package myAgents;
+package edu.cwru.sepia.agent;
 
 import edu.cwru.sepia.action.Action;
 import edu.cwru.sepia.action.ActionFeedback;
 import edu.cwru.sepia.action.ActionResult;
-import edu.cwru.sepia.agent.Agent;
 import edu.cwru.sepia.environment.model.history.History.HistoryView;
 import edu.cwru.sepia.environment.model.state.State.StateView;
 import utils.ActionsMap;
@@ -14,11 +13,11 @@ import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
 
-public class CombatAgent extends Agent
+public class MyCombatAgent extends Agent
 {
     private int enemyPlayerNum = 1;
 
-    public CombatAgent(int playerNum, String[] args)
+    public MyCombatAgent(int playerNum, String[] args)
     {
         super(playerNum);
 

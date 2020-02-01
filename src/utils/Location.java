@@ -30,12 +30,12 @@ public class Location
         return "Location{" + "X=" + X + ", Y=" + Y + '}';
     }
 
-    public int X()
+    public int getX()
     {
         return X;
     }
 
-    public int Y()
+    public int getY()
     {
         return Y;
     }

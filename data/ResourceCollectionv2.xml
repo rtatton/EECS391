@@ -779,7 +779,7 @@
             <type>WOOD</type>
         </resourceAmount>
         <supply>2</supply>
-        <supplyCap>10</supplyCap>
+        <supplyCap>5</supplyCap>
 
     </player>
     <resourceNode>

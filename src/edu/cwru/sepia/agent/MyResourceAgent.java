@@ -1,7 +1,6 @@
-package myAgents;
+package edu.cwru.sepia.agent;
 
 import edu.cwru.sepia.action.Action;
-import edu.cwru.sepia.agent.Agent;
 import edu.cwru.sepia.environment.model.history.History.HistoryView;
 import edu.cwru.sepia.environment.model.state.ResourceNode.ResourceView;
 import edu.cwru.sepia.environment.model.state.ResourceNode.Type;
@@ -10,6 +9,7 @@ import edu.cwru.sepia.environment.model.state.State.StateView;
 import edu.cwru.sepia.environment.model.state.Unit.UnitView;
 import utils.ActionsMap;
 import utils.PlayerState;
+import utils.PlayerState.Units;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -17,9 +17,9 @@ import java.util.List;
 import java.util.Map;
 
 
-public class BuilderAgent extends Agent
+public class MyResourceAgent extends Agent
 {
-    public BuilderAgent(int playerNum)
+    public MyResourceAgent(int playerNum)
     {
         super(playerNum);
         System.out.println("Time to build!");
@@ -42,12 +42,12 @@ public class BuilderAgent extends Agent
         ActionsMap actions = new ActionsMap(player.getPlayerNum());
 
         //Filters all units based on the current state and player, and collects all units of the same type into a List.
-        UnitView townHall = player.getUnitsByType(PlayerState.Units.TOWNHALL).get(0);
-        List<UnitView> peasants = player.getUnitsByType(PlayerState.Units.PEASANT);
+        UnitView townHall = player.getUnitsByType(Units.TOWNHALL).get(0);
+        List<UnitView> peasants = player.getUnitsByType(Units.PEASANT);
 
         // Current amount of gold and wood in town hall.
         int currGold = player.getResourceAmount(ResourceType.GOLD);
-        int currWood = player.getResourceAmount(ResourceType.GOLD);
+        int currWood = player.getResourceAmount(ResourceType.WOOD);
 
         // Make more peasants as soon as possible.
         // Gather resources from closest resource nodes that have resources. [eval function done]
@@ -76,7 +76,7 @@ public class BuilderAgent extends Agent
         if (player.canBuildMorePeasants())
         {
             // Tells SEPIA what type of unit to build.
-            int peasantTemplateId = player.getTemplate(PlayerState.Units.PEASANT).getID();
+            int peasantTemplateId = player.getTemplate(Units.PEASANT).getID();
             // Tells town hall to build unit with peasant template ID.
             actions.assign(Action.createCompoundProduction(townHall.getID(), peasantTemplateId));
         }

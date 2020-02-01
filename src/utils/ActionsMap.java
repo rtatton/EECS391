@@ -32,7 +32,7 @@ public class ActionsMap
     public void assign(Action action)
     {
         int assignedTo = action.getUnitId();
-        actions.put(assignedTo, action);
+        getMap().put(assignedTo, action);
     }
 
     public HashMap<Integer, Action> getMap()
@@ -42,12 +42,12 @@ public class ActionsMap
 
     public Collection<Action> getActions()
     {
-        return actions.values();
+        return getMap().values();
     }
 
     public java.util.Set<Integer> getAssignedUnits()
     {
-        return actions.keySet();
+        return getMap().keySet();
     }
 
     public int getPlayerNum()

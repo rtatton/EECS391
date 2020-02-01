@@ -2,7 +2,7 @@
 	<Map>data/Combat.xml</Map>
 	<Player Id="1">
 		<AgentClass>
-			<ClassName>CombatAgent</ClassName>
+			<ClassName>edu.cwru.sepia.agent.MyCombatAgent</ClassName>
 			<Argument>0</Argument>
 		</AgentClass>
 	</Player>
@@ -15,7 +15,7 @@
 	</Player>
 	<Player Id="0">
 		<AgentClass>
-			<ClassName>CombatAgentEnemy</ClassName>
+			<ClassName>edu.cwru.sepia.agent.enemyAgents.CombatAgentEnemy</ClassName>
 			<Argument>1</Argument>
 			<Argument>false</Argument>
 			<Argument>false</Argument>

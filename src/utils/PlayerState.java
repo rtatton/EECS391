@@ -81,7 +81,7 @@ public class PlayerState
     {
         Location loc1 = getUnitLocation(unit1);
         Location loc2 = getUnitLocation(unit2);
-        return DistanceMetrics.euclideanDistance(loc2.X(), loc2.Y(), loc1.X(), loc1.Y());
+        return DistanceMetrics.euclideanDistance(loc2.getX(), loc2.getY(), loc1.getX(), loc1.getY());
     }
 
     /**
@@ -93,7 +93,7 @@ public class PlayerState
     {
         Location loc1 = getResourceLocation(resource1);
         Location loc2 = getResourceLocation(resource2);
-        return DistanceMetrics.euclideanDistance(loc2.X(), loc2.Y(), loc1.X(), loc1.Y());
+        return DistanceMetrics.euclideanDistance(loc2.getX(), loc2.getY(), loc1.getX(), loc1.getY());
     }
 
     /**
@@ -103,9 +103,9 @@ public class PlayerState
      */
     public double getDistanceBetween(UnitView unit, ResourceView resource)
     {
-        Location unitLoc = getUnitLocation(unit);
-        Location resourceLoc = getResourceLocation(resource);
-        return DistanceMetrics.euclideanDistance(resourceLoc.X(), resourceLoc.Y(), unitLoc.X(), unitLoc.Y());
+        Location uLoc = getUnitLocation(unit);
+        Location rLoc = getResourceLocation(resource);
+        return DistanceMetrics.euclideanDistance(rLoc.getX(), rLoc.getY(), uLoc.getX(), uLoc.getY());
     }
 
     /**
