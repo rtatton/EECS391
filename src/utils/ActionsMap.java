@@ -27,12 +27,24 @@ public class ActionsMap
     /**
      * Given an {@link Action} specifying the unit and the command, add the {@link Action} to the HashMap of actions to
      * be executed.
-     * @param action Action to assign to the unit that is specified.
+     * @param actions One or more {@link Action}s to assign to the unit that is specified.
      */
-    public void assign(Action action)
+    public void assign(Action...actions)
     {
-        int assignedTo = action.getUnitId();
-        getMap().put(assignedTo, action);
+        for (Action action : actions)
+            getMap().put(action.getUnitId(), action);
+    }
+
+    public void assign(ActionsMap...newActions)
+    {
+        for (ActionsMap actions : newActions)
+            getMap().putAll(actions.getMap());
+    }
+
+    public void remove(Action...actions)
+    {
+        for (Action action : actions)
+            getMap().remove(action.getUnitId());
     }
 
     public HashMap<Integer, Action> getMap()
