@@ -31,7 +31,8 @@ public class PlayerView
     private int numFootmenBuilt;
     private int numFootmenLimit;
 
-    public PlayerView(int playerNum, StateView state, HistoryView history, int numFarmsLimit, int numPeasantsLimit, int numFootmenLimit)
+    public PlayerView(int playerNum, StateView state, HistoryView history, int numFarmsLimit, int numPeasantsLimit,
+                      int numFootmenLimit)
     {
         this.playerNum = playerNum;
         this.state = state;
