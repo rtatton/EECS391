@@ -24,13 +24,15 @@ public class MyResourceAgent extends Agent
     }
 
     @Override
-    public Map<Integer, Action> initialStep(StateView state, HistoryView history)
+    public Map<Integer, Action> initialStep(StateView state,
+                                            HistoryView history)
     {
         return middleStep(state, history);
     }
 
     @Override
-    public Map<Integer, Action> middleStep(StateView state, HistoryView history)
+    public Map<Integer, Action> middleStep(StateView state,
+                                           HistoryView history)
     {
         getPlayer().setStateAndHistory(state, history);
 

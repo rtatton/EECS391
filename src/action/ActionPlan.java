@@ -1,23 +1,27 @@
 package action;
 
+import action.ActionGroup.SelectionType;
 import edu.cwru.sepia.action.Action;
 import edu.cwru.sepia.environment.model.state.Unit.UnitView;
-import ActionGroup.SelectionType;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * User-facing end of the Action scheduling process. Each {@link ActionPlan} has a list of {@link ActionGroup}s that
- * organize {@link ActionMap}s, which contain individual {@link Action}s. That is, an {@link ActionMap} organizes
- * zero or more {@link Action}s of the same type, {@link ActionGroup} organizes {@link ActionMap}s by how they should
- * be grouped when deciding which {@link Action}s to execute,and the {@link ActionPlan} allows for scheduling
- * {@link ActionGroup}s.
+ * User-facing end of the Action scheduling process. Each {@link ActionPlan}
+ * has a list of {@link ActionGroup}s that organize {@link ActionMap}s, which
+ * contain individual {@link Action}s. That is, an {@link ActionMap} organizes
+ * zero or more {@link Action}s of the same type, {@link ActionGroup}
+ * organizes {@link ActionMap}s by how they should be grouped when deciding
+ * which {@link Action}s to execute,and the {@link ActionPlan} allows for
+ * scheduling {@link ActionGroup}s.
  * <p>
- * The intended flow of operation is (1) {@link ActionPlan#createActionPlan()} is instantiate an empty
- * {@link ActionPlan}; (2) use any of the {@code schedule()} methods to imply the {@link ActionGroup}s that should be
- * made; (3) specify the {@link UnitView}s to consider when creating the final plan; (4) {@link #createPlan()} to
- * create the final {@link ActionMap} to run.
+ * The intended flow of operation is (1)
+ * {@link ActionPlan#createActionPlan()} instantiates an empty
+ * {@link ActionPlan}; (2) use any of the {@code schedule()} methods to imply
+ * the {@link ActionGroup}s that should be made; (3) specify the
+ * {@link UnitView}s to consider when creating the final plan; (4)
+ * {@link #createPlan()} to create the final {@link ActionMap} to run.
  */
 public class ActionPlan
 {
@@ -44,17 +48,23 @@ public class ActionPlan
 
     public void scheduleRandom(ActionMap... actionMaps)
     {
-        addToSchedule(new ActionGroup(Action.ActionGroup.SelectionType.RANDOM, actionMaps));
+        addToSchedule(new ActionGroup(SelectionType.RANDOM, actionMaps));
     }
 
     public void scheduleAscendingSize(ActionMap... actionMaps)
     {
-        addToSchedule(new ActionGroup(Action.ActionGroup.SelectionType.ASCENDING_SIZE, actionMaps));
+        addToSchedule(new ActionGroup(
+                SelectionType.ASCENDING_SIZE,
+                actionMaps
+        ));
     }
 
     public void scheduleDescendingSize(ActionMap... actionMaps)
     {
-        addToSchedule(new ActionGroup(Action.ActionGroup.SelectionType.DESCENDING_SIZE, actionMaps));
+        addToSchedule(new ActionGroup(
+                SelectionType.DESCENDING_SIZE,
+                actionMaps
+        ));
     }
 
     public void addToSchedule(ActionGroup... actionGroups)
@@ -69,7 +79,9 @@ public class ActionPlan
 
     public void addUnitsToPool(List<UnitView> units)
     {
-        Set<Integer> toAdd = units.stream().map(UnitView::getID).collect(Collectors.toSet());
+        Set<Integer> toAdd =
+                units.stream().map(UnitView::getID).collect(Collectors.toSet());
+
         getUnitIdPool().addAll(toAdd);
     }
 
@@ -80,6 +92,7 @@ public class ActionPlan
             for (ActionMap actionMap : group.select())
             {
                 ActionMap filteredActionMap = ActionMap.createActionsMap();
+
                 actionMap.getActionMap()
                         .stream()
                         .filter(this::isUnassigned)

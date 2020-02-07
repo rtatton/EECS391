@@ -18,8 +18,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Unifying interface that represents a player in SEPIA. Allows for a player to access its {@link StateView} and
- * {@link HistoryView}.
+ * Unifying wrapper class that represents a player in SEPIA. Allows for a
+ * player to access its {@link StateView} and {@link HistoryView}, thus
+ * allowing a "player" to both consider the state of the game and the history
+ * in order to make moves. This class is essentially the Agent, but without
+ * needing to specify separating the {@link StateView} and{@link HistoryView}
+ * with every method call.
  */
 public class PlayerView
 {
@@ -33,7 +37,25 @@ public class PlayerView
     private int numFootmenBuilt;
     private int numFootmenLimit;
 
-    public PlayerView(int playerNum, StateView state, HistoryView history, int numFarmsLimit, int numPeasantsLimit,
+    /**
+     * Constructor explicitly calling for all fields of a PlayerView.
+     *
+     * @param playerNum        The SEPIA identifier given to the player that
+     *                         relates to internal game mechanics.
+     * @param state            The StateView of this player.
+     * @param history          The HistoryView of this player.
+     * @param numFarmsLimit    The number of farms to limit the player from
+     *                         building.
+     * @param numPeasantsLimit The number of peasants to limit the player
+     *                         from building.
+     * @param numFootmenLimit  The number of footmen to limit the player from
+     *                         building.
+     */
+    public PlayerView(int playerNum,
+                      StateView state,
+                      HistoryView history,
+                      int numFarmsLimit,
+                      int numPeasantsLimit,
                       int numFootmenLimit)
     {
         this.playerNum = playerNum;
@@ -47,75 +69,160 @@ public class PlayerView
         this.numFootmenBuilt = 0;
     }
 
-    public PlayerView(int playerNum, StateView state, HistoryView history)
+    /**
+     * Alternative PlayerView constructor that only requires the playernum,
+     * the StateView and the HistoryView. All Unit limits are default set to 3.
+     *
+     * @param playerNum The SEPIA identifier given to the player that relates
+     *                  to internal game mechanics.
+     * @param state     The StateView of this player.
+     * @param history   The HistoryView of this player.
+     */
+    public PlayerView(int playerNum,
+                      StateView state,
+                      HistoryView history)
     {
         this(playerNum, state, history, 3, 3, 3);
     }
 
+    /**
+     * Alternative PlayerView constructor that only requires the playernum.
+     * The StateView and the HistoryView are set to null and all Unit limits
+     * are default set to 3. This is the same constructor called by {@link
+     * #createPlayer(int)}. Since the {@link StateView} and
+     * {@link HistoryView} of the player have not been instantiated, these
+     * fields must be set prior to all.
+     *
+     * @param playerNum The SEPIA identifier given to the player that relates
+     *                  to internal game mechanics.
+     */
     public PlayerView(int playerNum)
     {
         this(playerNum, null, null, 3, 3, 3);
     }
 
+    /**
+     * Factor method for instantiating PlayerView.
+     *
+     * @param playerNum The SEPIA identifier given to the player that relates
+     *                  to internal game mechanics.
+     * @return A new instance of PlayerView that has default Unit
+     * limits, {@code null} StateView and {@code null} HistoryView.
+     */
     public static PlayerView createPlayer(int playerNum)
     {
         return new PlayerView(playerNum);
     }
 
+    /**
+     * Filters a {@link List<UnitView>} that matches a specified
+     * {@link Units} enum type.
+     *
+     * @param units    The list of {@link UnitView} instances to filter.
+     * @param unitType The {@link Units} enum specifying which units are of
+     *                 interest.
+     * @return The filtered {@link List<UnitView>}. If no instances in the
+     * list were found to match th {@code unitType}, an empty {@link
+     * ArrayList<UnitView>} is returned, as opposed to {@code null}.
+     */
     public List<UnitView> getUnitsByType(List<UnitView> units, Units unitType)
     {
+        String unitTypeStr = unitType.toString();
         List<UnitView> filtered = units
                 .stream()
-                .filter(unit -> unit.getTemplateView().getName().equals(unitType.toString()))
+                .filter(unit -> unit.getTemplateView().getName().equals(unitTypeStr))
                 .collect(Collectors.toList());
+
         return filtered.isEmpty() ? new ArrayList<>() : filtered;
     }
 
-    /***
-     * @param unitType The type of unit by which to filter.
-     * @return List of {@link UnitView} objects belonging to the filtered units.
+    /**
+     * Filters all {@link UnitView}s visible to the player that matches a
+     * specified {@link Units} enum type.
+     *
+     * @param unitType The {@link Units} enum specifying which units are of
+     *                 interest.
+     * @return The filtered {@link List<UnitView>}. If no instances in the list
+     * were found to match the {@code unitType}, an empty
+     * {@link ArrayList<UnitView>} is returned, as opposed to {@code null}.
      */
     public List<UnitView> getUnitsByType(Units unitType)
     {
-        List<UnitView> filtered = getUnits()
-                .stream()
-                // Filter units whose name matches the unitType parameter.
-                .filter(unit -> unit.getTemplateView().getName().equals(unitType.toString()))
-                // Store the filtered information in a List.
-                .collect(Collectors.toList());
-        return filtered.isEmpty() ? new ArrayList<>() : filtered;
+        return getUnitsByType(getUnits(), unitType);
     }
 
-    public UnitView getUnitByType(Units unitType)
+    /**
+     * Filters all {@link UnitView}s visible to the player that matches a
+     * specified {@link Units} enum type and returns the first instance in the
+     * resulting list.
+     *
+     * @param unitType The {@link Units} enum specifying which units are of
+     *                 interest.
+     * @return The single {@link UnitView} of the filtered list.
+     * @throws IndexOutOfBoundsException Thrown if no {@link UnitView} are in
+     *                                   the list.
+     */
+    public UnitView getUnitByType(Units unitType) throws IndexOutOfBoundsException
     {
         return getUnitsByType(unitType).get(0);
     }
 
+    /**
+     * Explicit version of {@link #getUnitsByType(List, Units)} that filters
+     * by {@link Units#PEASANT}.
+     *
+     * @param units The list of {@link UnitView} instances to filter.
+     * @return Zero or more of the {@link UnitView}s in {@code units} that
+     * are peasants.
+     */
     public List<UnitView> getPeasants(List<UnitView> units)
     {
         return getUnitsByType(units, Units.PEASANT);
     }
 
-    public List<UnitView> getPeasants()
-    {
-        return getUnitsByType(Units.PEASANT);
-    }
-
+    /**
+     * Explicit version of {@link #getUnitsByType(List, Units)} that filters
+     * by {@link Units#TOWNHALL}.
+     *
+     * @param units The list of {@link UnitView} instances to filter.
+     * @return Zero or more of the {@link UnitView}s in {@code units} that
+     * are town halls.
+     */
     public List<UnitView> getTownHalls(List<UnitView> units)
     {
         return getUnitsByType(units, Units.TOWNHALL);
     }
 
+    /**
+     * Explicit version of {@link #getUnitsByType(Units)} that filters by
+     * {@link Units#PEASANT}.
+     *
+     * @return Zero or more of the {@link UnitView}s in {@code units} that
+     * are peasants.
+     */
+    public List<UnitView> getPeasants()
+    {
+        return getUnitsByType(Units.PEASANT);
+    }
+
+    /**
+     * Explicit version of {@link #getUnitByType(Units)} that filters by
+     * {@link Units#TOWNHALL}.
+     *
+     * @return Zero or more of the {@link UnitView}s in {@code units} that
+     * are town halls.
+     */
     public UnitView getTownHall()
     {
         return getUnitByType(Units.TOWNHALL);
     }
 
     /**
-     * Wrapper method for determining if a unit is carrying cargo.
+     * Wrapper method for determining if a {@link UnitView} is carrying cargo.
      *
      * @param unit Unit to test of its carrying cargo.
-     * @return {@code True} if the unit is carrying cargo, and {@code False} otherwise.
+     * @return {@code True} if the unit is carrying cargo, and {@code False}
+     * otherwise.
      */
     public boolean isCarryingCargo(UnitView unit)
     {
@@ -126,7 +233,8 @@ public class PlayerView
      * Wrapper method for determining if a resource has a nonzero amount.
      *
      * @param resource Resource to test of it still has a remaining amount.
-     * @return {@code True} if the resource has a remaining amount, and {@code False} otherwise.
+     * @return {@code True} if the resource has a remaining amount, and
+     * {@code False} otherwise.
      */
     public boolean hasRemaining(ResourceView resource)
     {
@@ -134,63 +242,76 @@ public class PlayerView
     }
 
     /**
-     * Attempts to more efficiently return the closest resource node that has remaining resources by first checking if
-     * the last visited, closest resource node still has remaining resources. If it does not, then a new closest
-     * resource node is searched.
+     * Attempts to more efficiently return the closest resource node that has
+     * remaining resources by first checking if the last visited, closest
+     * resource node still has remaining resources. If it does not, then a
+     * new closest resource node is searched.
      *
      * @param unit1        Unit that is used a start location.
      * @param townHall     Unit that is used as a destination.
      * @param resourceType Type of resource to collect.
-     * @return Resource node with remaining resources that is along the shortest path from a unit to a resource, and
+     * @return Resource node with remaining resources that is along the
+     * shortest path from a unit to a resource, and
      * back to the town hall.
      */
-    public ResourceView findBestResource(UnitView unit1, UnitView townHall, ResourceNode.Type resourceType)
+    public ResourceView findBestResource(UnitView unit1,
+                                         UnitView townHall,
+                                         ResourceNode.Type resourceType)
     {
-        return lastResourceWithRemaining(resourceType).orElse(findClosestResource(unit1, townHall, resourceType));
+        return lastResource(resourceType)
+                .orElse(findClosestResource(unit1, townHall, resourceType));
     }
 
     /**
-     * Finds the {@link ResourceView} such that the sum of Euclidean distance from the collecting unit to the resource
-     * and the Euclidean distance from the resource to the town hall is a minimum.
+     * Finds the {@link ResourceView} such that the sum of Euclidean distance
+     * from the collecting unit to the resource and the Euclidean distance
+     * from the resource to the town hall is a minimum.
      *
      * @param unit     Unit that is used as a start location.
      * @param townHall Unit that is used as a destination.
      * @param type     Type of resource from which to collect.
      * @return The resource with the estimated minimum distance to travel.
      */
-    public ResourceView findClosestResource(UnitView unit, UnitView townHall, ResourceNode.Type type)
+    public ResourceView findClosestResource(UnitView unit,
+                                            UnitView townHall,
+                                            ResourceNode.Type type)
     {
         List<ResourceView> resources = state.getResourceNodes(type);
         ResourceView closest = resources.get(0);
-        double minPathCost = Double.POSITIVE_INFINITY;
+        double minCost = Double.POSITIVE_INFINITY;
 
         for (ResourceView resource : resources)
         {
             if (hasRemaining(resource))
             {
-                double totalPathCost = Location.distBetween(unit, resource) + Location.distBetween(townHall, resource);
-
-                if (totalPathCost == minPathCost && resource.getAmountRemaining() > closest.getAmountRemaining())
+                double unitToRes = Location.distBetween(unit, resource);
+                double resToHall = Location.distBetween(townHall, resource);
+                double totalCost = unitToRes + resToHall;
+                boolean currHasMore =
+                        resource.getAmountRemaining() > closest.getAmountRemaining();
+                if (totalCost == minCost && currHasMore)
                 {
                     closest = resource;
-                    minPathCost = totalPathCost;
+                    minCost = totalCost;
                 }
-
-                if (totalPathCost < minPathCost)
+                if (totalCost < minCost)
                 {
                     closest = resource;
-                    minPathCost = totalPathCost;
+                    minCost = totalCost;
                 }
             }
         }
+
         return closest;
     }
 
     /**
-     * Convenience method that determines if a player has enough wood and gold to build a specified unit.
+     * Convenience method that determines if a player has enough wood and
+     * gold to build a specified unit.
      *
      * @param toBuild Unit to build.
-     * @return {@code True} if the player has enough wood and gold, and {@code False} otherwise.
+     * @return {@code True} if the player has enough wood and gold, and
+     * {@code False} otherwise.
      */
     public boolean hasEnoughGoldAndWood(Units toBuild)
     {
@@ -201,7 +322,8 @@ public class PlayerView
      * Determines if a player has enough gold to build a specified unit.
      *
      * @param toBuild Unit to build.
-     * @return {@code True} if the player has enough gold, and {@code False} otherwise.
+     * @return {@code True} if the player has enough gold, and {@code False}
+     * otherwise.
      */
     public boolean hasEnoughGold(Units toBuild)
     {
@@ -214,7 +336,8 @@ public class PlayerView
      * Determines if a player has enough wood to build a specified unit.
      *
      * @param toBuild Unit to build.
-     * @return {@code True} if the player has enough wood, and {@code False} otherwise.
+     * @return {@code True} if the player has enough wood, and {@code False}
+     * otherwise.
      */
     public boolean hasEnoughWood(Units toBuild)
     {
@@ -227,28 +350,25 @@ public class PlayerView
      * Finds the last visited resource that still has a remaining amount.
      *
      * @param resourceType Resource type to consider.
-     * @return If the type of resource has been visited before, the most recently visited resource node that has a
-     * remaining amount. If the type of resource has not been visited, the {@link Optional} will contain {@code null}.
+     * @return If the type of resource has been visited before, the most
+     * recently visited resource node that has a remaining amount. If the type
+     * of resource has not been visited, the{@link Optional} will contain
+     * {@code null}.
      */
-    public Optional<ResourceView> lastResourceWithRemaining(ResourceNode.Type resourceType)
+    public Optional<ResourceView> lastResource(ResourceNode.Type resourceType)
     {
         return history.getResourcePickupLogs(getPlayerNum())
                 .stream()
-                // Get the resource nodes that have been visited.
                 .map(ResourcePickupLog::getNodeID)
                 .map(state::getResourceNode)
-                // Consider only the resource nodes that match the resource type.
                 .filter(node -> node.getType().equals(resourceType))
-                // Keep only those nodes that have remaining resources.
                 .filter(this::hasRemaining)
-                // Return the most recent node.
                 .findFirst();
     }
 
     public ActionMap depositResources(List<UnitView> units)
     {
         ActionMap actionMap = ActionMap.createActionsMap();
-
         List<UnitView> availableTownHalls = getTownHalls(units);
 
         if (canInteractWithResources(units))
@@ -257,7 +377,10 @@ public class PlayerView
 
             for (UnitView peasant : units)
                 if (isCarryingCargo(peasant))
-                    actionMap.assign(Action.createCompoundDeposit(peasant.getID(), townHallId));
+                    actionMap.assign(Action.createCompoundDeposit(
+                            peasant.getID(),
+                            townHallId
+                    ));
         }
 
         return actionMap;
@@ -276,22 +399,32 @@ public class PlayerView
         if (canBuildMorePeasants(availableTownHalls))
         {
             int townHallId = availableTownHalls.get(0).getID();
-            actionMap.assign(Action.createCompoundProduction(townHallId, getTemplate(Units.PEASANT).getID()));
+            int templateId = getTemplate(Units.PEASANT).getID();
+
+            actionMap.assign(Action.createCompoundProduction(
+                    townHallId,
+                    templateId
+            ));
 
             if (actionMap.isEffective())
                 setNumPeasantsBuilt(getNumPeasantsBuilt() + 1);
         }
+
         return actionMap;
     }
 
     /**
-     * Determines of the state of the game allows the agent to build more peasants.
+     * Determines of the state of the game allows the agent to build more
+     * peasants.
      *
-     * @return {@code True} if the supply cap has not been exceeded, and {@code False} otherwise.
+     * @return {@code True} if the supply cap has not been exceeded, and
+     * {@code False} otherwise.
      */
     public boolean canBuildMorePeasants(List<UnitView> townHalls)
     {
-        return hasEnoughGold(Units.PEASANT) && getNumPeasantsBuilt() < getNumPeasantsLimit() && townHalls.size() > 0;
+        return hasEnoughGold(Units.PEASANT) &&
+                getNumPeasantsBuilt() < getNumPeasantsLimit()
+                && townHalls.size() > 0;
     }
 
     public ActionMap buildFarm(List<UnitView> units)
@@ -306,7 +439,12 @@ public class PlayerView
                 Location where = Location.randomLocation(state);
                 int farmId = getTemplate(Units.FARM).getID();
 
-                actionMap.assign(Action.createCompoundBuild(farmBuilderId, farmId, where.getX(), where.getY()));
+                actionMap.assign(Action.createCompoundBuild(
+                        farmBuilderId,
+                        farmId,
+                        where.getX(),
+                        where.getY()
+                ));
             }
 
             if (actionMap.isEffective())
@@ -331,7 +469,11 @@ public class PlayerView
         if (canBuildMoreFootmen(availableTownHalls))
         {
             int townHallId = availableTownHalls.get(0).getID();
-            actionMap.assign(Action.createCompoundProduction(townHallId, getTemplate(Units.FOOTMAN).getID()));
+
+            actionMap.assign(Action.createCompoundProduction(
+                    townHallId,
+                    getTemplate(Units.FOOTMAN).getID()
+            ));
 
             if (actionMap.isEffective())
                 setNumFootmenBuilt(getNumFootmenBuilt() + 1);
@@ -340,13 +482,17 @@ public class PlayerView
     }
 
     /**
-     * Determines of the state of the game allows the agent to build more peasants.
+     * Determines of the state of the game allows the agent to build more
+     * peasants.
      *
-     * @return {@code True} if the supply cap has not been exceeded, and {@code False} otherwise.
+     * @return {@code True} if the supply cap has not been exceeded, and
+     * {@code False} otherwise.
      */
     public boolean canBuildMoreFootmen(List<UnitView> townHalls)
     {
-        return hasEnoughGold(Units.FOOTMAN) && getNumPeasantsBuilt() < getNumFootmenLimit() && townHalls.size() > 0;
+        return hasEnoughGold(Units.FOOTMAN) &&
+                getNumPeasantsBuilt() < getNumFootmenLimit() &&
+                townHalls.size() > 0;
     }
 
     public ActionMap gatherBalancedResources(List<UnitView> units)
@@ -360,25 +506,38 @@ public class PlayerView
             for (UnitView peasant : units)
             {
                 int peasantId = peasant.getID();
+                int resourceId = 0;
 
                 if (hasLessGoldThanWood())
                 {
-                    int bestGoldMineId = findBestResource(peasant, townHall, ResourceNode.Type.GOLD_MINE).getID();
-                    gatherActions.assign(Action.createCompoundGather(peasantId, bestGoldMineId));
+                    resourceId = findBestResource(
+                            peasant,
+                            townHall,
+                            ResourceNode.Type.GOLD_MINE
+                    ).getID();
+
                 } else
                 {
-                    int bestTreeId = findBestResource(peasant, townHall, ResourceNode.Type.TREE).getID();
-                    gatherActions.assign(Action.createCompoundGather(peasantId, bestTreeId));
+                    resourceId = findBestResource(
+                            peasant,
+                            townHall,
+                            ResourceNode.Type.TREE
+                    ).getID();
                 }
+                gatherActions.assign(Action.createCompoundGather(
+                        peasantId,
+                        resourceId
+                ));
             }
         }
+
         return gatherActions;
     }
 
-
     public boolean hasLessGoldThanWood()
     {
-        return getResourceAmount(ResourceType.GOLD) < getResourceAmount(ResourceType.WOOD);
+        return getResourceAmount(ResourceType.GOLD) <
+                getResourceAmount(ResourceType.WOOD);
     }
 
     public boolean isIncomplete(ActionResult actionResult)
@@ -390,7 +549,8 @@ public class PlayerView
      * Determines if another player has any units.
      *
      * @param enemyPlayer Player to check against for number of units.
-     * @return {@code True} if the player has at least 1 unit, and {@code False} otherwise.
+     * @return {@code True} if the player has at least 1 unit, and {@code
+     * False} otherwise.
      */
     public static boolean noEnemiesExist(PlayerView enemyPlayer)
     {
@@ -402,7 +562,8 @@ public class PlayerView
         if (getTurnNumber() == 0)
             return getUnits();
 
-        Set<UnitView> busyUnits = getCommandFeedBackResult(getTurnNumber() - 1)
+        int prevTurn = getTurnNumber() - 1;
+        Set<UnitView> busyUnits = getCommandFeedBackResult(prevTurn)
                 .stream()
                 .filter(this::isIncomplete)
                 .map(this::getActionResultUnit)
@@ -436,7 +597,7 @@ public class PlayerView
 
     public List<Integer> getUnitIds()
     {
-        return getUnits().stream().map(UnitView::getID).collect(Collectors.toList());
+        return getUnitIds(getUnits());
     }
 
     public Map<Integer, ActionResult> getCommandFeedback(int step)
@@ -520,19 +681,9 @@ public class PlayerView
         this.history = history;
     }
 
-    public void setNumFarmsLimit(int numFarmsLimit)
-    {
-        this.numFarmsLimit = numFarmsLimit;
-    }
-
     public void setNumFarmsBuilt(int farmsBuilt)
     {
         this.numFarmsBuilt = farmsBuilt;
-    }
-
-    public void setNumPeasantsLimit(int numPeasantsLimit)
-    {
-        this.numPeasantsLimit = numPeasantsLimit;
     }
 
     public void setNumPeasantsBuilt(int numPeasantsBuilt)
@@ -543,11 +694,6 @@ public class PlayerView
     public void setNumFootmenBuilt(int numFootmenBuilt)
     {
         this.numFootmenBuilt = numFootmenBuilt;
-    }
-
-    public void setNumFootmenLimit(int numFootmenLimit)
-    {
-        this.numFootmenLimit = numFootmenLimit;
     }
 
 

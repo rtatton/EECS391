@@ -5,11 +5,13 @@ import edu.cwru.sepia.action.Action;
 import java.util.*;
 
 /**
- * Wrapper to store instances of SEPIA Actions. An ActionMap maintains the {@code HashMap<Integer, Action>} underlying
- * data structure that SEPIA uses to access Actions. The advantages of an ActionMap include being able to group
- * multiple instances of the same type of Action to multiple units and creating/assigning Actions in a more
- * syntactically
- * understandable manner (i.e., with the {@link #assign(Action...)} or {@link #assign(ActionMap...)} methods).
+ * Wrapper to store instances of SEPIA Actions. An ActionMap maintains the
+ * {@code HashMap<Integer, Action>} underlying data structure that SEPIA uses
+ * to access Actions. The advantages of an {@link ActionMap} include being able
+ * to group multiple instances of the same type of Action to multiple units and
+ * creating/assigning Actions in a more syntactically understandable manner
+ * (i.e., with the {@link #assign(Action...)} or{@link #assign(ActionMap...)}
+ * methods).
  *
  * @author Ryan Tatton
  */
@@ -38,8 +40,9 @@ public class ActionMap
     }
 
     /**
-     * Safely copies the contents of one ActionMap into a new ActionMap. Used in the sorting methods defined in
-     * {@link ActionGroup#sortAscending()}, and {@link ActionGroup#sortDescending()}.
+     * Safely copies the contents of one ActionMap into a new ActionMap. Used
+     * in the sorting methods defined in {@link ActionGroup#sortAscending()},
+     * and {@link ActionGroup#sortDescending()}.
      *
      * @return New copy of an ActionMap, with its contents.
      */
@@ -51,21 +54,25 @@ public class ActionMap
     /**
      * Adds one or more {@link Action}s, to {@link #actionMap}.
      *
-     * @param actions One or more {@link Action}s to assign to the unit that is specified.
+     * @param actions One or more {@link Action}s to assign to the unit that
+     *                is specified.
      */
     public void assign(Action... actions)
     {
-        Arrays.stream(actions).forEach(action -> getMap().put(action.getUnitId(), action));
+        Arrays.stream(actions)
+                .forEach(action -> getMap().put(action.getUnitId(), action));
     }
 
     /**
-     * Adds all {@link Action}s of one or more {@link ActionMap}s to this instance's {@link #actionMap}.
+     * Adds all {@link Action}s of one or more {@link ActionMap}s to this
+     * instance's {@link #actionMap}.
      *
      * @param newActions One or more {{@link #actionMap}}s to add.
      */
     public void assign(ActionMap... newActions)
     {
-        Arrays.stream(newActions).forEach(actions -> getMap().putAll(actions.getMap()));
+        Arrays.stream(newActions)
+                .forEach(actions -> getMap().putAll(actions.getMap()));
     }
 
     public int size()
