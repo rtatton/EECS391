@@ -12,9 +12,7 @@ import edu.cwru.sepia.environment.model.state.State.StateView;
 import edu.cwru.sepia.environment.model.state.Template.TemplateView;
 import edu.cwru.sepia.environment.model.state.Unit.UnitView;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -28,22 +26,46 @@ public class PlayerView
     private HistoryView history;
     private int numFarmsBuilt;
     private int numFarmsLimit;
+    private int numPeasantsBuilt;
+    private int numPeasantsLimit;
+    private int numFootmenBuilt;
+    private int numFootmenLimit;
 
-    public PlayerView(int playerNum, StateView state, HistoryView history)
+    public PlayerView(int playerNum, StateView state, HistoryView history, int numFarmsLimit, int numPeasantsLimit, int numFootmenLimit)
     {
         this.playerNum = playerNum;
         this.state = state;
         this.history = history;
+        this.numFarmsLimit = numFarmsLimit;
+        this.numFarmsBuilt = 0;
+        this.numPeasantsLimit = numPeasantsLimit;
+        this.numPeasantsBuilt = 1;
+        this.numFootmenLimit = numFootmenLimit;
+        this.numFootmenBuilt = 0;
+    }
+
+    public PlayerView(int playerNum, StateView state, HistoryView history)
+    {
+        this(playerNum, state, history, 3, 3, 3);
     }
 
     public PlayerView(int playerNum)
     {
-        this(playerNum, null, null);
+        this(playerNum, null, null, 3, 3, 3);
     }
 
-    public int getPlayerNum()
+    public static PlayerView createPlayer(int playerNum)
     {
-        return playerNum;
+        return new PlayerView(playerNum);
+    }
+
+    public List<UnitView> getUnitsByType(List<UnitView> units, Units unitType)
+    {
+        List<UnitView> filtered = units
+                .stream()
+                .filter(unit -> unit.getTemplateView().getName().equals(unitType.toString()))
+                .collect(Collectors.toList());
+        return filtered.isEmpty() ? new ArrayList<>() : filtered;
     }
 
     /***
@@ -52,24 +74,38 @@ public class PlayerView
      */
     public List<UnitView> getUnitsByType(Units unitType)
     {
-        return getUnits()
+        List<UnitView> filtered = getUnits()
                 .stream()
                 // Filter units whose name matches the unitType parameter.
-                .filter(unit -> unit.getTemplateView().getName().equals(unitType.getUnit()))
+                .filter(unit -> unit.getTemplateView().getName().equals(unitType.toString()))
                 // Store the filtered information in a List.
                 .collect(Collectors.toList());
+        return filtered.isEmpty() ? new ArrayList<>() : filtered;
     }
 
-    /**
-     * Determines of the state of the game allows the agent to build more peasants.
-     *
-     * @return {@code True} if the supply cap has not been exceeded, and {@code False} otherwise.
-     */
-    public boolean canBuildMorePeasants()
+    public UnitView getUnitByType(Units unitType)
     {
-        List<UnitView> peasants = getUnitsByType(Units.PEASANT);
+        return getUnitsByType(unitType).get(0);
+    }
 
-        return hasEnoughGold(Units.PEASANT) && peasants.size() < getSupplyCap();
+    public List<UnitView> getPeasants(List<UnitView> units)
+    {
+        return getUnitsByType(units, Units.PEASANT);
+    }
+
+    public List<UnitView> getPeasants()
+    {
+        return getUnitsByType(Units.PEASANT);
+    }
+
+    public List<UnitView> getTownHalls(List<UnitView> units)
+    {
+        return getUnitsByType(units, Units.TOWNHALL);
+    }
+
+    public UnitView getTownHall()
+    {
+        return getUnitByType(Units.TOWNHALL);
     }
 
     /**
@@ -99,8 +135,8 @@ public class PlayerView
      * the last visited, closest resource node still has remaining resources. If it does not, then a new closest
      * resource node is searched.
      *
-     * @param unit1 Unit that is used a start location.
-     * @param townHall Unit that is used as a destination.
+     * @param unit1        Unit that is used a start location.
+     * @param townHall     Unit that is used as a destination.
      * @param resourceType Type of resource to collect.
      * @return Resource node with remaining resources that is along the shortest path from a unit to a resource, and
      * back to the town hall.
@@ -114,9 +150,9 @@ public class PlayerView
      * Finds the {@link ResourceView} such that the sum of Euclidean distance from the collecting unit to the resource
      * and the Euclidean distance from the resource to the town hall is a minimum.
      *
-     * @param unit Unit that is used as a start location.
+     * @param unit     Unit that is used as a start location.
      * @param townHall Unit that is used as a destination.
-     * @param type Type of resource from which to collect.
+     * @param type     Type of resource from which to collect.
      * @return The resource with the estimated minimum distance to travel.
      */
     public ResourceView findClosestResource(UnitView unit, UnitView townHall, ResourceNode.Type type)
@@ -206,63 +242,140 @@ public class PlayerView
                 .findFirst();
     }
 
-    public ActionsMap buildFarm(UnitView farmBuilder)
+    public ActionMap depositResources(List<UnitView> units)
     {
-        ActionsMap actionsMap = new ActionsMap(getPlayerNum());
+        ActionMap actionMap = ActionMap.createActionsMap();
 
-        if (getNumFarmsBuilt() < getNumFarmsLimit() && hasEnoughGoldAndWood(Units.FARM))
+        List<UnitView> availableTownHalls = getTownHalls(units);
+
+        if (canInteractWithResources(units))
         {
-            Location where = Location.randomLocation(state);
-            int farmId = getTemplate(Units.FARM).getID();
-            actionsMap.assign(Action.createCompoundBuild(farmBuilder.getID(), farmId, where.getX(), where.getY()));
+            int townHallId = availableTownHalls.get(0).getID();
+
+            for (UnitView peasant : units)
+                if (isCarryingCargo(peasant))
+                    actionMap.assign(Action.createCompoundDeposit(peasant.getID(), townHallId));
         }
 
-        if (actionsMap.getMap().size() > 0)
-            setNumFarmsBuilt(getNumFarmsBuilt() + 1);
-
-        return actionsMap;
+        return actionMap;
     }
 
-    public ActionsMap depositResources(List<UnitView> units, UnitView townHall)
+    public boolean canInteractWithResources(List<UnitView> units)
     {
-        ActionsMap actionsMap = new ActionsMap(getPlayerNum());
-
-        for (UnitView peasant : units)
-            actionsMap.assign(Action.createCompoundDeposit(peasant.getID(), townHall.getID()));
-
-        return actionsMap;
+        return getTownHalls(units).size() > 0 && getPeasants(units).size() > 0;
     }
 
-    public ActionsMap buildPeasant(UnitView townHall)
+    public ActionMap buildPeasant(List<UnitView> units)
     {
-        ActionsMap actionsMap = new ActionsMap(getPlayerNum());
+        ActionMap actionMap = ActionMap.createActionsMap();
+        List<UnitView> availableTownHalls = getTownHalls(units);
 
-        if (canBuildMorePeasants())
-            actionsMap.assign(Action.createCompoundProduction(townHall.getID(), getTemplate(Units.PEASANT).getID()));
-
-        return actionsMap;
-    }
-
-    public ActionsMap gatherBalancedResources(List<UnitView> units, UnitView townHall)
-    {
-        ActionsMap gatherActions = new ActionsMap(getPlayerNum());
-
-        for (UnitView peasant : units)
+        if (canBuildMorePeasants(availableTownHalls))
         {
-            int peasantId = peasant.getID();
+            int townHallId = availableTownHalls.get(0).getID();
+            actionMap.assign(Action.createCompoundProduction(townHallId, getTemplate(Units.PEASANT).getID()));
 
-            if (getResourceAmount(ResourceType.GOLD) < getResourceAmount(ResourceType.WOOD))
+            if (actionMap.isEffective())
+                setNumPeasantsBuilt(getNumPeasantsBuilt() + 1);
+        }
+        return actionMap;
+    }
+
+    /**
+     * Determines of the state of the game allows the agent to build more peasants.
+     *
+     * @return {@code True} if the supply cap has not been exceeded, and {@code False} otherwise.
+     */
+    public boolean canBuildMorePeasants(List<UnitView> townHalls)
+    {
+        return hasEnoughGold(Units.PEASANT) && getNumPeasantsBuilt() < getNumPeasantsLimit() && townHalls.size() > 0;
+    }
+
+    public ActionMap buildFarm(List<UnitView> units)
+    {
+        ActionMap actionMap = ActionMap.createActionsMap();
+
+        if (canBuildMoreFarms(units))
+        {
+            for (UnitView peasant : units)
             {
-                int bestGoldMineId = findBestResource(peasant, townHall, ResourceNode.Type.GOLD_MINE).getID();
-                gatherActions.assign(Action.createCompoundGather(peasantId, bestGoldMineId));
-            } else
+                int farmBuilderId = peasant.getID();
+                Location where = Location.randomLocation(state);
+                int farmId = getTemplate(Units.FARM).getID();
+
+                actionMap.assign(Action.createCompoundBuild(farmBuilderId, farmId, where.getX(), where.getY()));
+            }
+
+            if (actionMap.isEffective())
+                setNumFarmsBuilt(getNumFarmsBuilt() + 1);
+        }
+
+        return actionMap;
+    }
+
+    public boolean canBuildMoreFarms(List<UnitView> units)
+    {
+        return getPeasants(units).size() > 0 &&
+                getNumFarmsBuilt() < getNumFarmsLimit() &&
+                hasEnoughGoldAndWood(Units.FARM);
+    }
+
+    public ActionMap buildFootman(List<UnitView> units)
+    {
+        ActionMap actionMap = ActionMap.createActionsMap();
+        List<UnitView> availableTownHalls = getTownHalls(units);
+
+        if (canBuildMoreFootmen(availableTownHalls))
+        {
+            int townHallId = availableTownHalls.get(0).getID();
+            actionMap.assign(Action.createCompoundProduction(townHallId, getTemplate(Units.FOOTMAN).getID()));
+
+            if (actionMap.isEffective())
+                setNumFootmenBuilt(getNumFootmenBuilt() + 1);
+        }
+        return actionMap;
+    }
+
+    /**
+     * Determines of the state of the game allows the agent to build more peasants.
+     *
+     * @return {@code True} if the supply cap has not been exceeded, and {@code False} otherwise.
+     */
+    public boolean canBuildMoreFootmen(List<UnitView> townHalls)
+    {
+        return hasEnoughGold(Units.FOOTMAN) && getNumPeasantsBuilt() < getNumFootmenLimit() && townHalls.size() > 0;
+    }
+
+    public ActionMap gatherBalancedResources(List<UnitView> units)
+    {
+        ActionMap gatherActions = ActionMap.createActionsMap();
+
+        if (canInteractWithResources(units))
+        {
+            UnitView townHall = getTownHall();
+
+            for (UnitView peasant : units)
             {
-                int bestTreeId = findBestResource(peasant, townHall, ResourceNode.Type.TREE).getID();
-                gatherActions.assign(Action.createCompoundGather(peasantId, bestTreeId));
+                int peasantId = peasant.getID();
+
+                if (hasLessGoldThanWood())
+                {
+                    int bestGoldMineId = findBestResource(peasant, townHall, ResourceNode.Type.GOLD_MINE).getID();
+                    gatherActions.assign(Action.createCompoundGather(peasantId, bestGoldMineId));
+                } else
+                {
+                    int bestTreeId = findBestResource(peasant, townHall, ResourceNode.Type.TREE).getID();
+                    gatherActions.assign(Action.createCompoundGather(peasantId, bestTreeId));
+                }
             }
         }
-
         return gatherActions;
+    }
+
+
+    public boolean hasLessGoldThanWood()
+    {
+        return getResourceAmount(ResourceType.GOLD) < getResourceAmount(ResourceType.WOOD);
     }
 
     public boolean isIncomplete(ActionResult actionResult)
@@ -286,21 +399,16 @@ public class PlayerView
         if (getTurnNumber() == 0)
             return getUnits();
 
-        return this.getCommandFeedback(getTurnNumber() - 1).values()
+        Set<UnitView> busyUnits = getCommandFeedBackResult(getTurnNumber() - 1)
                 .stream()
-                .filter(actionResult -> !isIncomplete(actionResult))
-                .map(actionResult -> getUnit((actionResult.getAction().getUnitId())))
-                .collect(Collectors.toList());
-    }
+                .filter(this::isIncomplete)
+                .map(this::getActionResultUnit)
+                .collect(Collectors.toSet());
 
-    public int getNumFarmsLimit()
-    {
-        return numFarmsLimit;
-    }
+        Set<UnitView> allUnits = new HashSet<>(getUnits());
+        allUnits.removeAll(busyUnits);
 
-    public int getNumFarmsBuilt()
-    {
-        return numFarmsBuilt;
+        return new ArrayList<>(allUnits);
     }
 
     public List<UnitView> getUnits()
@@ -313,9 +421,34 @@ public class PlayerView
         return state.getUnit(unitId);
     }
 
+    public List<UnitView> getUnits(List<Integer> unitIds)
+    {
+        return unitIds.stream().map(this::getUnit).collect(Collectors.toList());
+    }
+
+    public List<Integer> getUnitIds(List<UnitView> units)
+    {
+        return units.stream().map(UnitView::getID).collect(Collectors.toList());
+    }
+
+    public List<Integer> getUnitIds()
+    {
+        return getUnits().stream().map(UnitView::getID).collect(Collectors.toList());
+    }
+
     public Map<Integer, ActionResult> getCommandFeedback(int step)
     {
         return history.getCommandFeedback(getPlayerNum(), step);
+    }
+
+    public List<ActionResult> getCommandFeedBackResult(int step)
+    {
+        return new ArrayList<>(getCommandFeedback(step).values());
+    }
+
+    public UnitView getActionResultUnit(ActionResult actionResult)
+    {
+        return getUnit(actionResult.getAction().getUnitId());
     }
 
     public int getResourceAmount(ResourceType type)
@@ -325,17 +458,53 @@ public class PlayerView
 
     public TemplateView getTemplate(Units unit)
     {
-        return state.getTemplate(getPlayerNum(), unit.getUnit());
-    }
-
-    public int getSupplyCap()
-    {
-        return state.getSupplyCap(getPlayerNum());
+        return state.getTemplate(getPlayerNum(), unit.toString());
     }
 
     public int getTurnNumber()
     {
         return state.getTurnNumber();
+    }
+
+    public int getPlayerNum()
+    {
+        return playerNum;
+    }
+
+    public int getNumFarmsLimit()
+    {
+        return numFarmsLimit;
+    }
+
+    public int getNumFarmsBuilt()
+    {
+        return numFarmsBuilt;
+    }
+
+    public int getNumPeasantsBuilt()
+    {
+        return numPeasantsBuilt;
+    }
+
+    public int getNumPeasantsLimit()
+    {
+        return numPeasantsLimit;
+    }
+
+    public int getNumFootmenBuilt()
+    {
+        return numFootmenBuilt;
+    }
+
+    public int getNumFootmenLimit()
+    {
+        return numFootmenLimit;
+    }
+
+    public void setStateAndHistory(StateView state, HistoryView history)
+    {
+        setState(state);
+        setHistory(history);
     }
 
     public void setState(StateView state)
@@ -348,15 +517,36 @@ public class PlayerView
         this.history = history;
     }
 
+    public void setNumFarmsLimit(int numFarmsLimit)
+    {
+        this.numFarmsLimit = numFarmsLimit;
+    }
+
     public void setNumFarmsBuilt(int farmsBuilt)
     {
         this.numFarmsBuilt = farmsBuilt;
     }
 
-    public void setNumFarmsLimit(int farmLimit)
+    public void setNumPeasantsLimit(int numPeasantsLimit)
     {
-        this.numFarmsLimit = farmLimit;
+        this.numPeasantsLimit = numPeasantsLimit;
     }
+
+    public void setNumPeasantsBuilt(int numPeasantsBuilt)
+    {
+        this.numPeasantsBuilt = numPeasantsBuilt;
+    }
+
+    public void setNumFootmenBuilt(int numFootmenBuilt)
+    {
+        this.numFootmenBuilt = numFootmenBuilt;
+    }
+
+    public void setNumFootmenLimit(int numFootmenLimit)
+    {
+        this.numFootmenLimit = numFootmenLimit;
+    }
+
 
     /**
      * Units corresponding to those available in the configuration file.
@@ -376,7 +566,7 @@ public class PlayerView
             this.unit = unit;
         }
 
-        public String getUnit()
+        public String toString()
         {
             return unit;
         }
