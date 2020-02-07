@@ -1,11 +1,11 @@
 package edu.cwru.sepia.agent;
 
+import action.ActionPlan;
 import edu.cwru.sepia.action.Action;
 import edu.cwru.sepia.environment.model.history.History.HistoryView;
 import edu.cwru.sepia.environment.model.state.State.StateView;
 import edu.cwru.sepia.environment.model.state.Unit.UnitView;
-import utils.ActionPlan;
-import utils.PlayerView;
+import playerView.PlayerView;
 
 import java.io.InputStream;
 import java.io.OutputStream;

@@ -1,4 +1,4 @@
-package utils;
+package action;
 
 import edu.cwru.sepia.action.Action;
 

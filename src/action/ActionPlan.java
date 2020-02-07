@@ -1,8 +1,8 @@
-package utils;
+package action;
 
 import edu.cwru.sepia.action.Action;
 import edu.cwru.sepia.environment.model.state.Unit.UnitView;
-import utils.ActionGroup.SelectionType;
+import ActionGroup.SelectionType;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -44,17 +44,17 @@ public class ActionPlan
 
     public void scheduleRandom(ActionMap... actionMaps)
     {
-        addToSchedule(new ActionGroup(SelectionType.RANDOM, actionMaps));
+        addToSchedule(new ActionGroup(Action.ActionGroup.SelectionType.RANDOM, actionMaps));
     }
 
     public void scheduleAscendingSize(ActionMap... actionMaps)
     {
-        addToSchedule(new ActionGroup(SelectionType.ASCENDING_SIZE, actionMaps));
+        addToSchedule(new ActionGroup(Action.ActionGroup.SelectionType.ASCENDING_SIZE, actionMaps));
     }
 
     public void scheduleDescendingSize(ActionMap... actionMaps)
     {
-        addToSchedule(new ActionGroup(SelectionType.DESCENDING_SIZE, actionMaps));
+        addToSchedule(new ActionGroup(Action.ActionGroup.SelectionType.DESCENDING_SIZE, actionMaps));
     }
 
     public void addToSchedule(ActionGroup... actionGroups)

@@ -1,12 +1,11 @@
 package edu.cwru.sepia.agent;
 
 import edu.cwru.sepia.action.Action;
-import edu.cwru.sepia.action.ActionFeedback;
-import edu.cwru.sepia.action.ActionResult;
 import edu.cwru.sepia.environment.model.history.History.HistoryView;
 import edu.cwru.sepia.environment.model.state.State.StateView;
-import utils.ActionsMap;
-import utils.PlayerState;
+import edu.cwru.sepia.environment.model.state.Unit.UnitView;
+import ActionMap;
+import playerView.PlayerView;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -21,7 +20,6 @@ public class MyCombatAgent extends Agent
     {
         super(playerNum);
 
-
         if (args.length > 0)
             this.enemyPlayerNum = new Integer(args[0]);
 
@@ -31,14 +29,14 @@ public class MyCombatAgent extends Agent
     @Override
     public Map<Integer, Action> initialStep(StateView state, HistoryView history)
     {
-        PlayerState player = new PlayerState(playernum, state, history);
-        PlayerState enemy = new PlayerState(enemyPlayerNum, state, history);
-        ActionsMap actions = new ActionsMap(player.getPlayerNum());
+        PlayerView player = new PlayerView(getPlayerNumber(), state, history);
+        PlayerView enemy = new PlayerView(enemyPlayerNum, state, history);
+        ActionMap actions = new ActionMap();
 
-        List<Integer> myUnitIds = state.getUnitIds(playernum);
-        List<Integer> enemyUnitIds = state.getUnitIds(enemyPlayerNum);
+        List<Integer> myUnitIds = player.getUnitIds();
+        List<Integer> enemyUnitIds = enemy.getUnitIds();
 
-        if (PlayerState.noEnemiesExist(enemy))
+        if (PlayerView.noEnemiesExist(enemy))
             return actions.getMap();
 
         for (Integer myUnitId : myUnitIds)
@@ -50,23 +48,21 @@ public class MyCombatAgent extends Agent
     @Override
     public Map<Integer, Action> middleStep(StateView state, HistoryView history)
     {
-        PlayerState player = new PlayerState(playernum, state, history);
-        PlayerState enemy = new PlayerState(enemyPlayerNum, state, history);
-        ActionsMap actions = new ActionsMap(player.getPlayerNum());
+        PlayerView player = new PlayerView(playernum, state, history);
+        PlayerView enemy = new PlayerView(enemyPlayerNum, state, history);
+        ActionMap actions = new ActionMap();
 
         List<Integer> enemyUnitIds = state.getUnitIds(enemyPlayerNum);
 
-        if (PlayerState.noEnemiesExist(enemy))
+        if (PlayerView.noEnemiesExist(enemy))
             return actions.getMap();
 
         int currentStep = state.getTurnNumber();
 
-        for (ActionResult feedback : player.getCommandFeedback(currentStep - 1).values())
-            if (feedback.getFeedback() != ActionFeedback.INCOMPLETE)
-            {
-                int unitId = feedback.getAction().getUnitId();
-                actions.assign(Action.createCompoundAttack(unitId, enemyUnitIds.get(0)));
-            }
+        player.getUnoccupiedUnits()
+                .stream()
+                .map(UnitView::getID)
+                .forEach(unit -> actions.assign(Action.createCompoundAttack(unit, enemyUnitIds.get(0))));
 
         return actions.getMap();
     }

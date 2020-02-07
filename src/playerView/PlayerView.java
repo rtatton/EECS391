@@ -1,5 +1,6 @@
-package utils;
+package playerView;
 
+import action.ActionMap;
 import edu.cwru.sepia.action.Action;
 import edu.cwru.sepia.action.ActionFeedback;
 import edu.cwru.sepia.action.ActionResult;
@@ -11,6 +12,7 @@ import edu.cwru.sepia.environment.model.state.ResourceType;
 import edu.cwru.sepia.environment.model.state.State.StateView;
 import edu.cwru.sepia.environment.model.state.Template.TemplateView;
 import edu.cwru.sepia.environment.model.state.Unit.UnitView;
+import utils.Location;
 
 import java.util.*;
 import java.util.stream.Collectors;
