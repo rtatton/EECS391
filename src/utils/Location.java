@@ -4,8 +4,6 @@ import edu.cwru.sepia.environment.model.state.ResourceNode.ResourceView;
 import edu.cwru.sepia.environment.model.state.State.StateView;
 import edu.cwru.sepia.environment.model.state.Unit.UnitView;
 
-import java.util.Random;
-
 import static edu.cwru.sepia.util.DistanceMetrics.euclideanDistance;
 
 /**
@@ -95,8 +93,8 @@ public class Location
 
     public static Location randomLocation(StateView state)
     {
-        int x = randomInt(0, state.getXExtent());
-        int y = randomInt(0, state.getYExtent());
+        int x = Utils.randomInt(0, state.getXExtent());
+        int y = Utils.randomInt(0, state.getYExtent());
         Location location = new Location(x, y);
 
         return isOpen(state, location) ? location : randomLocation(state);
@@ -126,14 +124,6 @@ public class Location
         boolean isResourceAt = state.isResourceAt(location.getX(), location.getY());
         boolean isUnitAt = state.isUnitAt(location.getX(), location.getY());
         return !(isResourceAt || isUnitAt);
-    }
-
-    private static int randomInt(int min, int max) throws IllegalArgumentException
-    {
-        if (min > max)
-            throw new IllegalArgumentException(min + " must be less than " + max);
-
-        return new Random().ints(min, max).findFirst().getAsInt();
     }
 
     public static boolean isOnBoard(StateView state, Location location)
