@@ -22,14 +22,14 @@ public class ActionGroup
     private List<ActionMap> actionGroup;
     private SelectionType selectionType;
 
-    public ActionGroup(SelectionType selectionType,
-                       List<ActionMap> actionGroup)
+    private ActionGroup(SelectionType selectionType,
+                        List<ActionMap> actionGroup)
     {
         this.actionGroup = actionGroup;
         this.selectionType = selectionType;
     }
 
-    public ActionGroup(SelectionType selectionType)
+    private ActionGroup(SelectionType selectionType)
     {
         this(
                 selectionType,
@@ -37,30 +37,30 @@ public class ActionGroup
         );
     }
 
-    public ActionGroup(ActionMap... actionMap)
+    private ActionGroup(ActionMap... actionMaps)
     {
         this(
                 SelectionType.SEQUENTIAL,
-                new ArrayList<>(Arrays.asList(actionMap))
+                new ArrayList<>(Arrays.asList(actionMaps))
         );
     }
 
-    public ActionGroup(SelectionType selectionType,
-                       ActionMap... actionMaps)
+    private ActionGroup(SelectionType selectionType,
+                        ActionMap... actionMaps)
     {
         this(
                 selectionType,
-                Arrays.asList(actionMaps)
+                new ArrayList<>(Arrays.asList(actionMaps))
         );
     }
 
-    public ActionGroup(ActionGroup group)
+    private ActionGroup(ActionGroup group)
     {
         this.actionGroup = new ArrayList<>(group.getActionGroup());
         this.selectionType = group.getSelectionType();
     }
 
-    public ActionGroup()
+    private ActionGroup()
     {
         this(
                 SelectionType.SEQUENTIAL,
@@ -68,19 +68,52 @@ public class ActionGroup
         );
     }
 
-    public void addToGroup(ActionMap... actionMaps)
+    public static ActionGroup createActionGroup(SelectionType selectionType,
+                                                List<ActionMap> actionGroup)
+    {
+        return new ActionGroup(selectionType, actionGroup);
+    }
+
+    public static ActionGroup createActionGroup(SelectionType selectionType)
+    {
+        return new ActionGroup(selectionType);
+    }
+
+    public static ActionGroup createActionGroup(ActionMap... actionMaps)
+    {
+        return new ActionGroup(actionMaps);
+    }
+
+    public static ActionGroup createActionGroup(SelectionType selectionType,
+                                                ActionMap... actionMaps)
+    {
+        return new ActionGroup(selectionType, actionMaps);
+    }
+
+    public static ActionGroup createActionGroup(ActionGroup group)
+    {
+        return new ActionGroup(group);
+    }
+
+    public static ActionGroup createActionGroup()
+    {
+        return new ActionGroup();
+    }
+
+
+    private void addToGroup(ActionMap... actionMaps)
     {
         getActionGroup().addAll(Arrays.asList(actionMaps));
     }
 
-    public ActionGroup copy()
+    private ActionGroup copy()
     {
         return new ActionGroup(this);
     }
 
     public List<ActionMap> select()
     {
-        switch (selectionType)
+        switch (getSelectionType())
         {
             case RANDOM:
                 return selectRandom();
@@ -93,12 +126,12 @@ public class ActionGroup
         }
     }
 
-    public List<ActionMap> selectSequential()
+    private List<ActionMap> selectSequential()
     {
         return getActionGroup();
     }
 
-    public List<ActionMap> selectRandom()
+    private List<ActionMap> selectRandom()
     {
         ArrayList<ActionMap> random = new ArrayList<>();
 
@@ -112,25 +145,17 @@ public class ActionGroup
         return random;
     }
 
-    public List<ActionMap> selectAscendingSize()
+    private List<ActionMap> selectAscendingSize()
     {
         return copy().sortAscending();
     }
 
-    public List<ActionMap> selectDescendingSize()
+    private List<ActionMap> selectDescendingSize()
     {
         return copy().sortDescending();
     }
 
-    public List<ActionMap> sortDescending()
-    {
-        return getActionGroup()
-                .stream()
-                .sorted(Comparator.comparing(ActionMap::size).reversed())
-                .collect(Collectors.toList());
-    }
-
-    public List<ActionMap> sortAscending()
+    private List<ActionMap> sortDescending()
     {
         return getActionGroup()
                 .stream()
@@ -138,24 +163,12 @@ public class ActionGroup
                 .collect(Collectors.toList());
     }
 
-    public boolean isSequential()
+    private List<ActionMap> sortAscending()
     {
-        return getSelectionType() == SelectionType.SEQUENTIAL;
-    }
-
-    public boolean isRandom()
-    {
-        return getSelectionType() == SelectionType.RANDOM;
-    }
-
-    public boolean isAscendingSize()
-    {
-        return getSelectionType() == SelectionType.ASCENDING_SIZE;
-    }
-
-    public boolean isDescendingSize()
-    {
-        return getSelectionType() == SelectionType.DESCENDING_SIZE;
+        return getActionGroup()
+                .stream()
+                .sorted(Comparator.comparing(ActionMap::size).reversed())
+                .collect(Collectors.toList());
     }
 
     public List<ActionMap> getActionGroup()
@@ -166,6 +179,13 @@ public class ActionGroup
     public SelectionType getSelectionType()
     {
         return selectionType;
+    }
+
+    public String toString()
+    {
+        int num = getActionGroup().size();
+        String type = getSelectionType().toString();
+        return "ActionGroup{" + "size=" + num + ", selectionType=" + type + "}";
     }
 
     public enum SelectionType
