@@ -39,17 +39,19 @@ public class MyResourceAgent extends Agent
         List<UnitView> availableUnits = getPlayer().getUnoccupiedUnits();
         ActionPlan actionPlan = ActionPlan.createActionPlan();
 
-        actionPlan.scheduleAscendingSize(
-                getPlayer().buildFarm(availableUnits),
+        actionPlan.scheduleDescendingSize(
                 getPlayer().buildPeasant(availableUnits),
+                getPlayer().buildFarm(availableUnits),
+                getPlayer().buildBarracks(availableUnits),
                 getPlayer().buildFootman(availableUnits),
                 getPlayer().gatherBalancedResources(availableUnits),
                 getPlayer().depositResources(availableUnits)
         );
-        actionPlan.addUnitsToPool(availableUnits);
+
+        actionPlan.addUnitsToSet(availableUnits);
         actionPlan.createPlan();
 
-        return actionPlan.getActionPlanMap();
+        return actionPlan.getMap();
     }
 
     @Override
