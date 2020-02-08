@@ -37,7 +37,7 @@ public class ActionMap
      *
      * @return A new, empty ActionMap.
      */
-    private static ActionMap createActionsMap()
+    public static ActionMap createActionsMap()
     {
         return new ActionMap();
     }
