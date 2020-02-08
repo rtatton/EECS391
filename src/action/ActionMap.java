@@ -2,7 +2,10 @@ package action;
 
 import edu.cwru.sepia.action.Action;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 
 /**
  * Wrapper to store instances of SEPIA Actions. An ActionMap maintains the
@@ -59,7 +62,8 @@ public class ActionMap
      */
     public void assign(Action... actions)
     {
-        Arrays.stream(actions)
+        Arrays
+                .stream(actions)
                 .forEach(action -> getMap().put(action.getUnitId(), action));
     }
 
@@ -71,7 +75,8 @@ public class ActionMap
      */
     public void assign(ActionMap... newActions)
     {
-        Arrays.stream(newActions)
+        Arrays
+                .stream(newActions)
                 .forEach(actions -> getMap().putAll(actions.getMap()));
     }
 
@@ -85,9 +90,9 @@ public class ActionMap
         return getMap().size() > 0;
     }
 
-    public Collection<Action> getActionMap()
+    public List<Action> getActions()
     {
-        return getMap().values();
+        return new ArrayList<>(getMap().values());
     }
 
     public List<Integer> getAssignedUnitIds()
