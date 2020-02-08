@@ -22,12 +22,12 @@ public class ActionMap
 {
     private HashMap<Integer, Action> actionMap;
 
-    public ActionMap(ActionMap map)
+    private ActionMap(ActionMap map)
     {
         this.actionMap = new HashMap<>(map.getMap());
     }
 
-    public ActionMap()
+    private ActionMap()
     {
         this.actionMap = new HashMap<>();
     }
@@ -37,15 +37,15 @@ public class ActionMap
      *
      * @return A new, empty ActionMap.
      */
-    public static ActionMap createActionsMap()
+    private static ActionMap createActionsMap()
     {
         return new ActionMap();
     }
 
     /**
      * Safely copies the contents of one ActionMap into a new ActionMap. Used
-     * in the sorting methods defined in {@link ActionGroup#sortAscending()},
-     * and {@link ActionGroup#sortDescending()}.
+     * in the sorting methods defined in {@link ActionGroup}
+     * {@code sortDescending()} and {@code sortAscending()}.
      *
      * @return New copy of an ActionMap, with its contents.
      */
