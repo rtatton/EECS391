@@ -26,14 +26,14 @@ import java.util.stream.Collectors;
 public class ActionPlan
 {
     private List<ActionGroup> scheduledActions;
-    private Set<Integer> unitPool;
+    private Set<Integer> unitIdSet;
     private ActionMap actionPlan;
 
-    public ActionPlan()
+    private ActionPlan()
     {
-        this.actionPlan = new ActionMap();
+        this.actionPlan = ActionMap.createActionsMap();
         this.scheduledActions = new ArrayList<>();
-        this.unitPool = new HashSet<>();
+        this.unitIdSet = new HashSet<>();
     }
 
     public static ActionPlan createActionPlan()
@@ -43,17 +43,20 @@ public class ActionPlan
 
     public void scheduleSequence(ActionMap... actionMaps)
     {
-        addToSchedule(new ActionGroup(actionMaps));
+        addToSchedule(ActionGroup.createActionGroup(actionMaps));
     }
 
     public void scheduleRandom(ActionMap... actionMaps)
     {
-        addToSchedule(new ActionGroup(SelectionType.RANDOM, actionMaps));
+        addToSchedule(ActionGroup.createActionGroup(
+                SelectionType.RANDOM,
+                actionMaps
+        ));
     }
 
     public void scheduleAscendingSize(ActionMap... actionMaps)
     {
-        addToSchedule(new ActionGroup(
+        addToSchedule(ActionGroup.createActionGroup(
                 SelectionType.ASCENDING_SIZE,
                 actionMaps
         ));
@@ -61,48 +64,51 @@ public class ActionPlan
 
     public void scheduleDescendingSize(ActionMap... actionMaps)
     {
-        addToSchedule(new ActionGroup(
+        addToSchedule(ActionGroup.createActionGroup(
                 SelectionType.DESCENDING_SIZE,
                 actionMaps
         ));
     }
 
-    public void addToSchedule(ActionGroup... actionGroups)
+    private void addToSchedule(ActionGroup... actionGroups)
     {
         getScheduledActions().addAll(Arrays.asList(actionGroups));
     }
 
-    public void addToPlan(ActionMap actionMap)
+    private void addToPlan(ActionMap actionMap)
     {
         getActionPlan().assign(actionMap);
     }
 
-    public void addUnitsToPool(List<UnitView> units)
+    public void addUnitsToSet(List<UnitView> units)
     {
-        Set<Integer> toAdd =
-                units.stream().map(UnitView::getID).collect(Collectors.toSet());
+        Set<Integer> toAdd = units
+                .stream()
+                .map(UnitView::getID)
+                .collect(Collectors.toSet());
 
-        getUnitIdPool().addAll(toAdd);
+        getUnitIdSet().addAll(toAdd);
     }
 
     public void createPlan()
     {
         for (ActionGroup group : getScheduledActions())
         {
+            ActionMap filteredActionMap = ActionMap.createActionsMap();
+
             for (ActionMap actionMap : group.select())
             {
-                ActionMap filteredActionMap = ActionMap.createActionsMap();
-
-                actionMap.getActionMap()
+                actionMap.getActions()
                         .stream()
                         .filter(this::isUnassigned)
                         .forEach(filteredActionMap::assign);
+
                 addAndUpdateIfEffective(filteredActionMap);
             }
         }
     }
 
-    public void addAndUpdateIfEffective(ActionMap actionMap)
+    private void addAndUpdateIfEffective(ActionMap actionMap)
     {
         if (actionMap.isEffective())
         {
@@ -111,24 +117,24 @@ public class ActionPlan
         }
     }
 
-    public boolean isUnassigned(Action action)
+    private boolean isUnassigned(Action action)
     {
         return isUnassigned(action.getUnitId());
     }
 
-    public boolean isUnassigned(Integer unitId)
+    private boolean isUnassigned(Integer unitId)
     {
-        return getUnitIdPool().contains(unitId);
+        return getUnitIdSet().contains(unitId);
     }
 
-    public void removeAssignedUnits(List<Integer> assignedUnitIds)
+    private void removeAssignedUnits(List<Integer> assignedUnitIds)
     {
-        getUnitIdPool().removeAll(assignedUnitIds);
+        getUnitIdSet().removeAll(assignedUnitIds);
     }
 
-    public Set<Integer> getUnitIdPool()
+    public Set<Integer> getUnitIdSet()
     {
-        return unitPool;
+        return unitIdSet;
     }
 
     public ActionMap getActionPlan()
@@ -136,7 +142,7 @@ public class ActionPlan
         return actionPlan;
     }
 
-    public HashMap<Integer, Action> getActionPlanMap()
+    public HashMap<Integer, Action> getMap()
     {
         return getActionPlan().getMap();
     }
@@ -148,6 +154,6 @@ public class ActionPlan
 
     public String toString()
     {
-        return "ActionPlan{" + "size=" + getActionPlan().size() + ", " + getActionPlanMap();
+        return "ActionPlan{" + "size=" + getActionPlan().size() + ", " + getMap();
     }
 }
