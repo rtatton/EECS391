@@ -19,6 +19,7 @@ public class Strips implements StripsAction
 
     public enum ActionEnum
     {
-        DEPOSIT, EMPTY, GATHER_GOLD, GATHER_WOOD, PRODUCE;
+        GATHER, DEPOSIT, PRODUCE, EMPTY, GATHER_GOLD, GATHER_WOOD,
+        IDLE;
     }
 }
