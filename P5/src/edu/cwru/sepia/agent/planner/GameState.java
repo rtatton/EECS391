@@ -188,14 +188,18 @@ public class GameState implements Comparable<GameState>
                        .collect(Collectors.toSet());
     }
 
-    // TODO Will need to modify
     /*
-     *
-     * Honestly this is the meat of getChildren.
+    All Strips.ActionEnums that are present at the beginning of GameState
+    instantiation are the result of being set in the parent GameState. That is,
+    upon considering possible SEPIA actions, the current GameState describes
+    what is possible for the current state, as opposed to describing what
+    will be possible for the proceeding children states.
+     */
+
+    /*
      * Recursively determines which directives are satisfied and applies them
      * all to one DirectiveMap/GameState (we did this for scalability w
      * multiple peasants later)
-     *
      */
     public List<DirectiveMap> possibleDirectives(GameState current,
                                                  EnumSet<ActionEnum> satisfiedActions)
@@ -237,18 +241,21 @@ public class GameState implements Comparable<GameState>
         return getCost();
     }
 
+    // STRIPS action
     public void gather(Unit unit, Resource resource, int amount)
     {
         getUnitTracker().track(unit, GATHER);
         getResourceTracker().update(resource, (res, remain) -> remain - amount);
     }
 
+    // STRIPS action
     public void deposit(Unit unit, Type resourceType, int amount)
     {
         getUnitTracker().track(unit, DEPOSIT);
         getResourceTracker().adjustCurrentResource(resourceType, amount);
     }
 
+    // STRIPS action
     // TODO Make new peasant and track as IDLE
     public void produce(Unit unit)
     {
@@ -297,6 +304,8 @@ public class GameState implements Comparable<GameState>
      * @param o The game state to compare
      * @return True if this state equals the other state, false otherwise.
      */
+    // TODO Make sure this is efficient -- what is considered equal and
+    //  hashed will effect number of GameStates to consider
     @Override
     public boolean equals(Object o)
     {
@@ -304,14 +313,12 @@ public class GameState implements Comparable<GameState>
             return true;
         if (o == null || getClass() != o.getClass())
             return false;
-        GameState comp = (GameState) o;
-        if (getCurrentGold() != comp.getCurrentGold())
-            return false;
-        if (getCurrentWood() != comp.getCurrentWood())
-            return false;
-        if (numberOfPeasants() != comp.numberOfPeasants())
-            return false;
-        return getCost() == comp.getCost();
+        GameState gameState = (GameState) o;
+        boolean equalResources =
+                getResourceTracker().equals(gameState.getResourceTracker());
+        boolean equalUnits =
+                getUnitTracker().equals(gameState.getUnitTracker());
+        return equalResources && equalUnits;
     }
 
     /**
@@ -324,23 +331,18 @@ public class GameState implements Comparable<GameState>
     @Override
     public int hashCode()
     {
-        return Objects.hash(getCurrentGold(),
-                            getCurrentWood(),
-                            getCost(),
-                            numberOfPeasants());
+        return 0;
     }
 
     @Override
     public String toString()
     {
-        String currGold = "Current Gold: " + getCurrentGold();
-        String currWood = "Current Wood: " + getCurrentWood();
-        String numPeasants = "Number of Peasnts: " + numberOfPeasants();
-        String numGathering =
-                "Number Gathering: " + getPendingResources().size();
+        String gold = "Current Gold: " + getResourceTracker().getCurrentGold();
+        String wood = "Current Wood: " + getResourceTracker().getCurrentWood();
+        String peas = "Peasants = " + (getUnitTracker().getItems().size() - 1);
         String cost = "Cost: " + getCost();
         String heuristic = "Heuristic: " + getHeuristicCost();
-        return currGold + ", " + currWood + ", " + numPeasants + ", " + numGathering + ", " + cost + ", " + heuristic;
+        return gold + ", " + wood + ", " + peas + ", " + cost + ", " + heuristic;
     }
 
     public UnitTracker getUnitTracker()
@@ -966,7 +968,7 @@ public class GameState implements Comparable<GameState>
         }
     }
 
-    public class DirectiveMap extends Strips
+    public static class DirectiveMap extends Strips
     {
         private Map<Unit, Directive> directives;
 
@@ -998,7 +1000,6 @@ public class GameState implements Comparable<GameState>
             }
             return me.toString();
         }
-        // ******** REDESIGN ***************** //
 
         /*
          * this constructor handles directive implementation AND application
@@ -1090,38 +1091,130 @@ public class GameState implements Comparable<GameState>
         }
     }
 
-    /*
-     *
-     * Directive holds all information needed to translate a STRIPS action to
-     *  a SEPIA action.
-     *
-     */
-    public class Directive extends Strips
+    // Created to allow for optional fields, which arise when the Actions
+    // produce and build are introduced.
+    // TODO Could just have a mapping between ActionEnum and STRIPS -- saves
+    //  a redundant field
+    public static class DirectiveBuilder
     {
         private int unit;
         private int target;
+        private Position position;
         private ActionEnum type;
-        private ActionType action;
 
-        private Directive(int unit,
-                          int target,
-                          ActionEnum type,
-                          ActionType action)
+        public DirectiveBuilder()
+        {
+            this.unit = -1;
+            this.target = -1;
+            this.position = null;
+            this.type = null;
+        }
+
+        public Directive build()
+        {
+            return new Directive(this);
+        }
+
+        public DirectiveBuilder unit(int unit)
+        {
+            setUnit(unit);
+            return this;
+        }
+
+        public DirectiveBuilder target(int target)
+        {
+            setTarget(target);
+            return this;
+        }
+
+        public DirectiveBuilder position(Position position)
+        {
+            setPosition(position);
+            return this;
+        }
+
+        public DirectiveBuilder type(ActionEnum type)
+        {
+            setType(type);
+            return this;
+        }
+
+        public int getUnit()
+        {
+            return unit;
+        }
+
+        public void setUnit(int unit)
         {
             this.unit = unit;
+        }
+
+        public int getTarget()
+        {
+            return target;
+        }
+
+        public void setTarget(int target)
+        {
             this.target = target;
+        }
+
+        public Position getPosition()
+        {
+            return position;
+        }
+
+        public void setPosition(Position position)
+        {
+            this.position = position;
+        }
+
+        public ActionEnum getType()
+        {
+            return type;
+        }
+
+        public void setType(ActionEnum type)
+        {
             this.type = type;
-            this.action = action;
+        }
+    }
+
+    /*
+     * Directive holds all information needed to translate a STRIPS action to
+     *  a SEPIA action.
+     */
+    public static class Directive extends Strips
+    {
+        private int unit;
+        private int target;
+        private Position position;
+        private ActionEnum type;
+
+        private Directive(DirectiveBuilder builder)
+        {
+            this.unit = builder.getUnit();
+            this.target = builder.getTarget();
+            this.position = builder.getPosition();
+            this.type = builder.getType();
         }
 
         public Action createAction()
         {
-            switch (getActionType())
+            switch (ActionEnum.getActionType(getType()))
             {
-                case COMPOUNDGATHER:
-                    return Action.createCompoundGather(getUnit(), getTarget());
-                default:
+                case COMPOUNDDEPOSIT:
                     return Action.createCompoundDeposit(getUnit(), getTarget());
+                case COMPOUNDPRODUCE:
+                    return Action.createCompoundProduction(getUnit(),
+                                                           getTarget());
+                case COMPOUNDBUILD:
+                    return Action.createCompoundBuild(getUnit(),
+                                                      getTarget(),
+                                                      getPosition().getX(),
+                                                      getPosition().getY());
+                default:
+                    return Action.createCompoundGather(getUnit(), getTarget());
             }
         }
 
@@ -1135,14 +1228,14 @@ public class GameState implements Comparable<GameState>
             return target;
         }
 
+        public Position getPosition()
+        {
+            return position;
+        }
+
         public ActionEnum getType()
         {
             return type;
-        }
-
-        public ActionType getActionType()
-        {
-            return action;
         }
 
         @Override
@@ -1154,11 +1247,8 @@ public class GameState implements Comparable<GameState>
                 case DEPOSIT:
                     me = "Unit %d deposits resource to TownHall %d.";
                     break;
-                case GATHER_GOLD:
-                    me = "Unit %d mines gold from resource %d.";
-                    break;
-                case GATHER_WOOD:
-                    me = "Unit %d chops wood from resource %d.";
+                case GATHER:
+                    me = "Unit %d gathers from resource %d.";
                     break;
                 case PRODUCE:
                     return "TownHall produces one peasant.";

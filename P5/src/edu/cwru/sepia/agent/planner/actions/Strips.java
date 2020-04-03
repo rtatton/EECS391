@@ -1,10 +1,10 @@
 package edu.cwru.sepia.agent.planner.actions;
 
+import edu.cwru.sepia.action.ActionType;
 import edu.cwru.sepia.agent.planner.GameState;
 
 public class Strips implements StripsAction
 {
-
     @Override
     public boolean preconditionsMet(GameState state)
     {
@@ -19,7 +19,21 @@ public class Strips implements StripsAction
 
     public enum ActionEnum
     {
-        GATHER, DEPOSIT, PRODUCE, EMPTY, GATHER_GOLD, GATHER_WOOD,
-        IDLE;
+        BUILD, DEPOSIT, EMPTY, GATHER, IDLE, PRODUCE;
+
+        public static ActionType getActionType(ActionEnum action)
+        {
+            switch (action)
+            {
+                case DEPOSIT:
+                    return ActionType.COMPOUNDDEPOSIT;
+                case PRODUCE:
+                    return ActionType.COMPOUNDPRODUCE;
+                case BUILD:
+                    return ActionType.COMPOUNDBUILD;
+                default:
+                    return ActionType.COMPOUNDGATHER;
+            }
+        }
     }
 }
