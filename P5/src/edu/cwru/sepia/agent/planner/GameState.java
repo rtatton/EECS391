@@ -10,8 +10,10 @@ import edu.cwru.sepia.environment.model.state.Unit.UnitView;
 
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import static edu.cwru.sepia.agent.planner.actions.Strips.ActionEnum.*;
 import static edu.cwru.sepia.environment.model.state.ResourceNode.Type;
 import static edu.cwru.sepia.environment.model.state.ResourceType.GOLD;
 import static edu.cwru.sepia.environment.model.state.ResourceType.WOOD;
@@ -60,12 +62,12 @@ public class GameState implements Comparable<GameState>
                      int requiredWood,
                      boolean buildPeasants)
     {
-        this.unitTracker = new UnitTracker(getUnits(state), ActionEnum.IDLE);
-        this.resourceTracker = makeResourceTracker(state,
-                                                   playernum,
-                                                   requiredGold,
-                                                   requiredWood);
-        this.satisfied = EnumSet.of(ActionEnum.EMPTY);
+        this.unitTracker = new UnitTracker(getUnits(state), IDLE);
+        this.resourceTracker = createResourceTracker(state,
+                                                     playernum,
+                                                     requiredGold,
+                                                     requiredWood);
+        this.satisfied = EnumSet.of(EMPTY);
         this.cost = 0;
         this.heuristicCost = Double.POSITIVE_INFINITY;
         this.cameFrom = null;
@@ -80,7 +82,7 @@ public class GameState implements Comparable<GameState>
         this.resourceTracker = gameState.getResourceTracker();
         this.unitTracker = gameState.getUnitTracker();
         this.actions = gameState.getActions();
-        this.satisfied = EnumSet.of(ActionEnum.EMPTY);
+        this.satisfied = EnumSet.of(EMPTY);
         this.cost = gameState.getCost();
         this.heuristicCost = Double.POSITIVE_INFINITY;
         this.cameFrom = gameState;
@@ -95,22 +97,19 @@ public class GameState implements Comparable<GameState>
                     .collect(Collectors.toList());
     }
 
-    public ResourceTracker makeResourceTracker(StateView state,
-                                               int playerNum,
-                                               int requiredGold,
-                                               int requiredWood)
+    public ResourceTracker createResourceTracker(StateView state,
+                                                 int playerNum,
+                                                 int requiredGold,
+                                                 int requiredWood)
     {
-        int currentGold = state.getResourceAmount(playerNum, GOLD);
-        int currentWood = state.getResourceAmount(playerNum, WOOD);
-        ResourceTracker resourceTracker = new ResourceTracker(requiredGold,
-                                                              requiredWood,
-                                                              currentGold,
-                                                              currentWood);
-        Map<Resource, Integer> resourceMap = new HashMap<>();
-        for (Resource r : getResources(state, Type.GOLD_MINE, Type.TREE))
-            resourceMap.put(r, r.getRemaining());
-        resourceTracker.trackAll(resourceMap);
-        return resourceTracker;
+        ResourceTrackerBuilder b = new ResourceTrackerBuilder();
+        return b.currentGold(state.getResourceAmount(playerNum, GOLD))
+                .currentWood(state.getResourceAmount(playerNum, WOOD))
+                .resources(getResources(state, Type.GOLD_MINE, Type.TREE))
+                .goal(new GoalBuilder<Integer>().specify("gold", requiredGold)
+                                                .specify("wood", requiredWood)
+                                                .build())
+                .build();
     }
 
     // Constructor helper method
@@ -169,7 +168,7 @@ public class GameState implements Comparable<GameState>
      */
     public boolean isGoal()
     {
-        return getResourceTracker().getGoal().isSatisfied();
+        return getResourceTracker().isGoalSatisfied();
     }
 
     /**
@@ -222,7 +221,6 @@ public class GameState implements Comparable<GameState>
      * of computing a consistent heuristic that is even better, but not
      * strictly necessary.
      * <p>
-     * <p>
      * All this does is bias the agent against going over the resource goal.
      * Otherwise we only consider the sum of all the distances of previous
      * moves.
@@ -234,139 +232,36 @@ public class GameState implements Comparable<GameState>
     {
         if (isGoal())
             return 0;
-        if (getResourceTracker().exeededAnyRequired())
+        if (getResourceTracker().isGoalExceeded())
             return Double.POSITIVE_INFINITY;
         return getCost();
     }
 
-    /*
-     *
-     *  GameState mutators : these methods handle all state changes
-     *
-     */
-    // generalized application of "GATHER" directives to state,
-    // returns the resource selected to gather from.
-    public int gather(ActionEnum gatherAction, Unit peasant)
-            throws SchedulingException
+    public void gather(Unit unit, Resource resource, int amount)
     {
-        getUnitTracker().track(peasant);
-        if (gatherAction == ActionEnum.GATHER_GOLD)
-            return gatherGold(peasant);
-        else if (gatherAction == ActionEnum.GATHER_WOOD)
-            return gatherWood(peasant);
-        System.out.println(
-                "ERROR. Unit asked to gather unknown resource. gather(), " +
-                        "PlannerAgent.");
-        return -1;
+        getUnitTracker().track(unit, GATHER);
+        getResourceTracker().update(resource, (res, remain) -> remain - amount);
     }
 
-    // this method is only used to apply multiple actions onto one
-    // GameState.
-    public void gather(Unit unit, Resource resource) throws SchedulingException
+    public void deposit(Unit unit, Type resourceType, int amount)
     {
-        getUnitTracker().track(unit);
-        getResourceTracker(). if (getAvailableGold().contains(resource))
-    {
-        getReadyToGather().remove(unit);
-        getAvailableGold().remove(resource);
-        getPendingResources().put(unit, resource);
-    }
-        if (getAvailableWood().contains(resource))
-        {
-            getReadyToGather().remove(unit);
-            getAvailableWood().remove(resource);
-            getPendingResources().put(unit, resource);
-        }
+        getUnitTracker().track(unit, DEPOSIT);
+        getResourceTracker().adjustCurrentResource(resourceType, amount);
     }
 
-    private Integer gatherGold(int unit)
+    // TODO Make new peasant and track as IDLE
+    public void produce(Unit unit)
     {
-        Integer resourceId = getAvailableGold().poll();
-        getPendingResources().put(unit, resourceId);
-        return resourceId;
+        getUnitTracker().track(unit, PRODUCE);
     }
 
-    private Integer gatherWood(int unit)
-    {
-        Integer resourceId = getAvailableWood().poll();
-        getPendingResources().put(unit, resourceId);
-        return resourceId;
-    }
-
-    // generalized application of "DEPOSIT" directive
-    // returns the resourceId that they initially collected from.
-    public int deposit(int unit)
-    {
-        getReadyToGather().add(unit);
-        if (getPendingResources().containsKey(unit))
-            return depositResource(unit);
-        System.out.println("ERROR. Unit asked to deposit when unit " +
-                                   "unable" + ". " + "deposit(), " +
-                                   "PlannerAgent.");
-        return -1;
-    }
-
-    private int depositResource(int unit)
-    {
-        int resourceID = getPendingResources().get(unit);
-        adjustResourceRemaining(resourceID, -100);
-        if (hasResources(resourceID))
-            // TODO availableResources()
-            // Still want to sort by distance but need to differentiate
-            // between gold and wood. So would it be better to have two
-            // different data structures that stores wood and gold, or just
-            // have one that efficiently filters by resource type?
-            // If we make a resource class that contains distance and
-            // remaining and id, then we could use a priority queue
-            getAvailableWood().offerFirst(resourceID);
-        getPendingResources().remove(unit);
-        // TODO How to differentiate wood from gold?
-        adjustCurrentWood(100);
-        return resourceID;
-    }
-
-    // returns one peasant available to gather
-    public Integer getPeasantToGather()
-    {
-        return getReadyToGather().poll();
-    }
-
-    // returns one peasant who needs to deposit
-    public Integer getPeasantToDeposit()
-    {
-        return getReadyToDeposit().poll();
-    }
-
-    /*
-     *
-     *  predicates : questions you can ask about a GameState
-     *
-     */
-
-    // checks if resource has any resources
-    public boolean hasResources(int id)
-    {
-        return getResourceRemaining().get(id) > 0;
-    }
-
-    // TODO Set generalization would be lost if Resource class was created
-    /*
-     *
-     *  arguably most important method of this class, encapsulates all
-     * STRIPS logic!
-     *
-     */
+    // TODO Ensure matching and not consequence makes sense
     public void evaluate()
     {
-        getSatisfied().remove(ActionEnum.EMPTY);
-        if (!getPendingResources().isEmpty())
-            getSatisfied().add(ActionEnum.DEPOSIT);
-        if (!getReadyToGather().isEmpty() && !getAvailableGold().isEmpty())
-            getSatisfied().add(ActionEnum.GATHER_GOLD);
-        if (!getReadyToGather().isEmpty() && !getAvailableWood().isEmpty())
-            getSatisfied().add(ActionEnum.GATHER_WOOD);
+        getSatisfied().remove(EMPTY);
+        getSatisfied().addAll(getUnitTracker().getExistingStatuses());
         if (getSatisfied().isEmpty())
-            getSatisfied().add(ActionEnum.EMPTY);
+            getSatisfied().add(EMPTY);
     }
 
     /**
@@ -497,136 +392,118 @@ public class GameState implements Comparable<GameState>
     {
         this.actions = actions;
     }
-    //    private class Pool<W> implements Set<W>
-    //    {
-    //        private Set<W> workers;
-    //
-    //        public Pool(Set<W> workers)
-    //        {
-    //            this.workers = workers;
-    //        }
-    //
-    //        public Pool(Collection<W> workers)
-    //        {
-    //            this.workers = new HashSet<>(workers);
-    //        }
-    //
-    //        public Pool()
-    //        {
-    //            this(new HashSet<>());
-    //        }
-    //
-    //        public Set<W> getWorkers()
-    //        {
-    //            return workers;
-    //        }
-    //
-    //        public void setWorkers(Set<W> workers)
-    //        {
-    //            this.workers = workers;
-    //        }
-    //
-    //        @Override
-    //        public boolean equals(Object o)
-    //        {
-    //            if (this == o)
-    //                return true;
-    //            if (o == null || getClass() != o.getClass())
-    //                return false;
-    //            Pool<?> pool = (Pool<?>) o;
-    //            return Objects.equals(getWorkers(), pool.getWorkers());
-    //        }
-    //
-    //        @Override
-    //        public int hashCode()
-    //        {
-    //            return Objects.hash(getWorkers());
-    //        }
-    //
-    //        @Override
-    //        public int size()
-    //        {
-    //            return getWorkers().size();
-    //        }
-    //
-    //        @Override
-    //        public boolean isEmpty()
-    //        {
-    //            return getWorkers().isEmpty();
-    //        }
-    //
-    //        @Override
-    //        public boolean contains(Object o)
-    //        {
-    //            return getWorkers().contains(o);
-    //        }
-    //
-    //        @Override
-    //        public Iterator<W> iterator()
-    //        {
-    //            return getWorkers().iterator();
-    //        }
-    //
-    //        @Override
-    //        public Object[] toArray()
-    //        {
-    //            return getWorkers().toArray();
-    //        }
-    //
-    //        @Override
-    //        public <T> T[] toArray(T[] a)
-    //        {
-    //            return getWorkers().toArray(a);
-    //        }
-    //
-    //        @Override
-    //        public boolean add(W w)
-    //        {
-    //            return getWorkers().add(w);
-    //        }
-    //
-    //        @Override
-    //        public boolean remove(Object o)
-    //        {
-    //            return getWorkers().remove(o);
-    //        }
-    //
-    //        @Override
-    //        public boolean containsAll(Collection<?> c)
-    //        {
-    //            return getWorkers().containsAll(c);
-    //        }
-    //
-    //        @Override
-    //        public boolean addAll(Collection<? extends W> c)
-    //        {
-    //            return getWorkers().addAll(c);
-    //        }
-    //
-    //        @Override
-    //        public boolean retainAll(Collection<?> c)
-    //        {
-    //            return getWorkers().retainAll(c);
-    //        }
-    //
-    //        @Override
-    //        public boolean removeAll(Collection<?> c)
-    //        {
-    //            return getWorkers().removeAll(c);
-    //        }
-    //
-    //        @Override
-    //        public void clear()
-    //        {
-    //            getWorkers().clear();
-    //        }
-    //    }
 
     public static class UnitTracker extends Tracker<Unit, ActionEnum>
     {
         public UnitTracker(Collection<Unit> units, ActionEnum defaultStatus)
         {
             super(units, defaultStatus);
+        }
+    }
+
+    private static class ResourceTrackerBuilder
+            extends Tracker<Resource, Integer>
+    {
+        private Goal<Integer> goal;
+        private int currentGold;
+        private int currentWood;
+        private List<Integer> statuses;
+        private List<Resource> resources;
+
+        public ResourceTrackerBuilder()
+        {
+            super(new HashMap<>());
+            this.goal = new GoalBuilder<Integer>().build();
+            this.currentGold = 0;
+            this.currentWood = 0;
+        }
+
+        public ResourceTrackerBuilder goal(Goal<Integer> goal)
+        {
+            setGoal(goal);
+            return this;
+        }
+
+        public ResourceTracker build()
+        {
+            return new ResourceTracker(getResources(),
+                                       getGoal(),
+                                       getCurrentGold(),
+                                       getCurrentWood());
+        }
+
+        public ResourceTrackerBuilder currentGold(int gold)
+        {
+            setCurrentGold(gold);
+            return this;
+        }
+
+        public ResourceTrackerBuilder currentWood(int wood)
+        {
+            setCurrentWood(wood);
+            return this;
+        }
+
+        public ResourceTrackerBuilder statuses(List<Integer> statuses)
+        {
+            setStatuses(statuses);
+            return this;
+        }
+
+        public ResourceTrackerBuilder resources(List<Resource> resources)
+        {
+            setResources(resources);
+            return this;
+        }
+
+        public Goal<Integer> getGoal()
+        {
+            return goal;
+        }
+
+        public void setGoal(Goal<Integer> goal)
+        {
+            this.goal = goal;
+        }
+
+        public int getCurrentGold()
+        {
+            return currentGold;
+        }
+
+        public void setCurrentGold(int currentGold)
+        {
+            this.currentGold = currentGold;
+        }
+
+        public int getCurrentWood()
+        {
+            return currentWood;
+        }
+
+        public void setCurrentWood(int currentWood)
+        {
+            this.currentWood = currentWood;
+        }
+
+        public List<Integer> getStatuses()
+        {
+            return statuses;
+        }
+
+        public void setStatuses(List<Integer> statuses)
+        {
+            this.statuses = statuses;
+        }
+
+        public List<Resource> getResources()
+        {
+            return resources;
+        }
+
+        public void setResources(List<Resource> resources)
+        {
+            this.resources = resources;
         }
     }
 
@@ -637,21 +514,37 @@ public class GameState implements Comparable<GameState>
         private int currentGold;
         private int currentWood;
 
-        private ResourceTracker(int requiredGold,
-                                int requiredWood,
+        private ResourceTracker(Collection<Resource> resources,
+                                Goal<Integer> goal,
                                 int currentGold,
                                 int currentWood)
         {
-            this.goal = new GoalBuilder<Integer>().specify("gold", requiredGold)
-                                                  .specify("wood", requiredWood)
-                                                  .build();
+            super(resources,
+                  resources.stream()
+                           .map(Resource::getRemaining)
+                           .collect(Collectors.toList()));
+            this.goal = goal;
             this.currentGold = currentGold;
             this.currentWood = currentWood;
         }
 
         public boolean isGoalSatisfied()
         {
-            return false;
+            Map<String, Integer> test = new HashMap<>();
+            test.put("gold", getCurrentGold());
+            test.put("wood", getCurrentWood());
+            return getGoal().isSatisfied(test);
+        }
+
+        public boolean isGoalExceeded()
+        {
+            Map<String, Integer> test = new HashMap<>();
+            test.put("gold", getCurrentGold());
+            test.put("wood", getCurrentWood());
+            return getGoal().getCriteria()
+                            .values()
+                            .stream()
+                            .anyMatch(c -> test.get(c.getId()) > c.getObjective());
         }
 
         public Goal<Integer> getGoal()
@@ -662,6 +555,17 @@ public class GameState implements Comparable<GameState>
         public int getCurrentGold()
         {
             return currentGold;
+        }
+
+        public void adjustCurrentResource(Type type, int adjust)
+        {
+            switch (type)
+            {
+                case GOLD_MINE:
+                    adjustCurrentGold(adjust);
+                case TREE:
+                    adjustCurrentWood(adjust);
+            }
         }
 
         public void adjustCurrentGold(int adjust)
@@ -707,6 +611,16 @@ public class GameState implements Comparable<GameState>
             this.items = itemMap;
         }
 
+        public Tracker(Iterable<T> items, Iterable<S> statuses)
+        {
+            Map<T, S> itemMap = new HashMap<>();
+            Iterator<T> itemsIter = items.iterator();
+            Iterator<S> statusIter = statuses.iterator();
+            while (itemsIter.hasNext() && statusIter.hasNext())
+                itemMap.put(itemsIter.next(), statusIter.next());
+            this.items = itemMap;
+        }
+
         public Tracker(Tracker<T, S> tracker)
         {
             this.items = tracker.getItems();
@@ -717,14 +631,30 @@ public class GameState implements Comparable<GameState>
             this(new HashMap<>());
         }
 
-        public void track(T item, S status)
+        public void track(T item, S statusFirst)
         {
-            getItems().put(item, status);
+            getItems().put(item, statusFirst);
+        }
+
+        public void update(T item,
+                           BiFunction<? super T, ? super S, S> remapping)
+        {
+            getItems().computeIfPresent(item, remapping);
         }
 
         public void trackAll(Map<T, S> items)
         {
             getItems().putAll(items);
+        }
+
+        public boolean exists(S status)
+        {
+            return getItems().containsValue(status);
+        }
+
+        public Set<S> getExistingStatuses()
+        {
+            return new HashSet<>(getItems().values());
         }
 
         public Map<T, S> getItems()
@@ -943,6 +873,45 @@ public class GameState implements Comparable<GameState>
     }
 
     /**
+     * An abstraction of one part of a goal. A goal is comprised of one or
+     * more criterion, each with a name and an objective value. Implementing
+     * the Satisfiable interface, a Criterion is satisfied if the test value
+     * supplied is equal to the objective value.
+     * <p>
+     *
+     * @param <T> Type of the criterion objective.
+     */
+    private static class Criterion<T> implements Satisfiable<T>
+    {
+        private final String id;
+        private T objective;
+
+        public Criterion(String id, T objective)
+        {
+            this.id = id;
+            this.objective = objective;
+        }
+
+        @Override
+        public boolean isSatisfied(Map<String, T> test)
+        {
+            if (test.containsKey(getId()))
+                return test.get(getId()).equals(getObjective());
+            return false;
+        }
+
+        public String getId()
+        {
+            return id;
+        }
+
+        public T getObjective()
+        {
+            return objective;
+        }
+    }
+
+    /**
      * Implements the Builder design pattern for constructing Criterion
      * instances.
      *
@@ -997,45 +966,6 @@ public class GameState implements Comparable<GameState>
         }
     }
 
-    /**
-     * An abstraction of one part of a goal. A goal is comprised of one or
-     * more criterion, each with a name and an objective value. Implementing
-     * the Satisfiable interface, a Criterion is satisfied if the test value
-     * supplied is equal to the objective value.
-     * <p>
-     *
-     * @param <T> Type of the criterion objective.
-     */
-    private static class Criterion<T> implements Satisfiable<T>
-    {
-        private final String id;
-        private T objective;
-
-        public Criterion(String id, T objective)
-        {
-            this.id = id;
-            this.objective = objective;
-        }
-
-        @Override
-        public boolean isSatisfied(Map<String, T> test)
-        {
-            if (test.containsKey(getId()))
-                return test.get(getId()).equals(getObjective());
-            return false;
-        }
-
-        public String getId()
-        {
-            return id;
-        }
-
-        public T getObjective()
-        {
-            return objective;
-        }
-    }
-
     public class DirectiveMap extends Strips
     {
         private Map<Unit, Directive> directives;
@@ -1081,13 +1011,13 @@ public class GameState implements Comparable<GameState>
             int unitId;
             int resourceId;
             ActionType action;
-            if (type == ActionEnum.EMPTY)
+            if (type == EMPTY)
             {
                 throw new NullPointerException("Error, EMPTY enum passed to " + "DirectiveMap constructor");
             }
-            else if (type == ActionEnum.PRODUCE)
+            else if (type == PRODUCE)
                 return;
-            if (type == ActionEnum.DEPOSIT)
+            if (type == DEPOSIT)
             {
                 unitId = getDelta().getPeasantToDeposit();
                 resourceId = getDelta().deposit(unitId);
