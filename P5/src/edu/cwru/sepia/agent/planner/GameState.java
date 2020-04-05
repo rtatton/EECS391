@@ -856,10 +856,9 @@ public class GameState implements Comparable<GameState>
         }
 
         // returns true if remaining <= 0 after adjustment
-        public boolean adjustRemaining(int remaining)
+        public void adjustRemaining(int remaining)
         {
             setRemaining(getRemaining() + remaining);
-            return getRemaining() <= 0;
         }
 
         public void setRemaining(int remaining)
@@ -893,9 +892,14 @@ public class GameState implements Comparable<GameState>
             getItems().put(item, statusFirst);
         }
 
-        public int getCount(S s)
+        public boolean containsAny(S...s)
         {
-            return Collections.frequency(getItems().values(), s);
+           return Arrays.stream(s).anyMatch(this::contains);
+        }
+
+        public boolean contains(S s)
+        {
+            return getItems().containsValue(s);
         }
 
         public Map<T, S> getItems()
@@ -1045,7 +1049,7 @@ public class GameState implements Comparable<GameState>
 
         public CriterionBuilder()
         {
-            this.id = "";
+            this.id = null;
             this.objective = null;
         }
 

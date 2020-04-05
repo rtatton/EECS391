@@ -21,20 +21,17 @@ public class Produce implements StripsAction
         this.product = product;
     }
 
-    // TODO This type of precondition could be a chicken-and-egg problem
     @Override
     public boolean preconditionsMet(GameState state)
     {
-        boolean scheduled;
-        boolean shouldConsider;
-        boolean hasEnoughGold;
-        boolean hasEnoughWood;
-        scheduled = state.getUnitTracker().getItems().containsValue(PRODUCE);
-        shouldConsider = state.considerBuildingPeasants();
+        boolean scheduled = state.getUnitTracker().containsAny(PRODUCE, IDLE);
+        boolean shouldConsider = state.considerBuildingPeasants();
         int goldCost = getProduct().getGoldCostToProduce();
         int woodCost = getProduct().getWoodCostToProduce();
-        hasEnoughGold = state.getResourceTracker().hasEnough(GOLD, goldCost);
-        hasEnoughWood = state.getResourceTracker().hasEnough(WOOD, woodCost);
+        boolean hasEnoughGold =
+                state.getResourceTracker().hasEnough(GOLD, goldCost);
+        boolean hasEnoughWood =
+                state.getResourceTracker().hasEnough(WOOD, woodCost);
         return scheduled && shouldConsider && hasEnoughGold && hasEnoughWood;
     }
 

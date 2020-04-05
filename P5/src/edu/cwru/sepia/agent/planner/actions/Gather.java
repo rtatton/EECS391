@@ -6,8 +6,7 @@ import edu.cwru.sepia.agent.planner.GameState.Unit;
 
 import java.util.EnumSet;
 
-import static edu.cwru.sepia.agent.planner.actions.StripsEnum.DEPOSIT;
-import static edu.cwru.sepia.agent.planner.actions.StripsEnum.GATHER;
+import static edu.cwru.sepia.agent.planner.actions.StripsEnum.*;
 
 public class Gather implements StripsAction
 {
@@ -28,7 +27,7 @@ public class Gather implements StripsAction
     @Override
     public boolean preconditionsMet(GameState state)
     {
-        return state.getUnitTracker().getItems().containsValue(GATHER);
+        return state.getUnitTracker().containsAny(GATHER, IDLE);
     }
 
     @Override
@@ -38,7 +37,7 @@ public class Gather implements StripsAction
         applied.gather(getGatherer(), getGatherFrom(), 100);
         applied.getUnitTracker().validateAndTrack(getGatherer(), DEPOSIT);
         return applied;
-}
+    }
 
     @Override
     public EnumSet<StripsEnum> effects()
