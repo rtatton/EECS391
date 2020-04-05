@@ -1,19 +1,16 @@
 package edu.cwru.sepia.agent.planner;
 
-import edu.cwru.sepia.action.Action;
-import edu.cwru.sepia.action.ActionType;
-import edu.cwru.sepia.agent.planner.actions.Strips;
-import edu.cwru.sepia.agent.planner.actions.Strips.ActionEnum;
+import edu.cwru.sepia.agent.planner.actions.StripsEnum;
 import edu.cwru.sepia.environment.model.state.ResourceNode.ResourceView;
+import edu.cwru.sepia.environment.model.state.ResourceType;
 import edu.cwru.sepia.environment.model.state.State.StateView;
 import edu.cwru.sepia.environment.model.state.Unit.UnitView;
 
 import java.util.*;
 import java.util.Map.Entry;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
-import static edu.cwru.sepia.agent.planner.actions.Strips.ActionEnum.*;
+import static edu.cwru.sepia.agent.planner.actions.StripsEnum.*;
 import static edu.cwru.sepia.environment.model.state.ResourceNode.Type;
 import static edu.cwru.sepia.environment.model.state.ResourceType.GOLD;
 import static edu.cwru.sepia.environment.model.state.ResourceType.WOOD;
@@ -34,12 +31,10 @@ public class GameState implements Comparable<GameState>
 {
     private UnitTracker unitTracker;
     private ResourceTracker resourceTracker;
-    private EnumSet<ActionEnum> satisfied;
     private double cost;
     private double heuristicCost;
     private boolean buildPeasants;
     private GameState cameFrom;
-    private DirectiveMap actions;
 
     /**
      * Construct a GameState from a stateview object. This is used to
@@ -62,39 +57,44 @@ public class GameState implements Comparable<GameState>
                      int requiredWood,
                      boolean buildPeasants)
     {
-        this.unitTracker = new UnitTracker(getUnits(state), IDLE);
+        this.unitTracker = createUnitTracker(state);
         this.resourceTracker = createResourceTracker(state,
                                                      playernum,
                                                      requiredGold,
                                                      requiredWood);
-        this.satisfied = EnumSet.of(EMPTY);
         this.cost = 0;
-        this.heuristicCost = Double.POSITIVE_INFINITY;
+        this.heuristicCost = requiredGold + requiredGold;
         this.cameFrom = null;
-        this.actions = new DirectiveMap();
         this.buildPeasants = buildPeasants;
     }
 
     // Copy constructor. Used most of the time.
-    // TODO Add new fields
     public GameState(GameState gameState)
     {
         this.resourceTracker = gameState.getResourceTracker();
         this.unitTracker = gameState.getUnitTracker();
-        this.actions = gameState.getActions();
-        this.satisfied = EnumSet.of(EMPTY);
         this.cost = gameState.getCost();
-        this.heuristicCost = Double.POSITIVE_INFINITY;
+        this.heuristicCost = gameState.getHeuristicCost();
         this.cameFrom = gameState;
-        this.actions = null;
     }
 
-    public List<Unit> getUnits(StateView state)
+    public UnitTracker createUnitTracker(StateView state)
     {
-        return state.getAllUnits()
-                    .stream()
-                    .map(Unit::new)
-                    .collect(Collectors.toList());
+        List<UnitView> peasantUnits = state.getAllUnits();
+        peasantUnits.removeIf(u -> u.equals(getTownHall(state)));
+        List<Unit> units = new ArrayList<>();
+        for (UnitView u : peasantUnits)
+            units.add(new UnitBuilder().initialAction(IDLE)
+                                       .validActions(IDLE, GATHER, DEPOSIT)
+                                       .goldCostToProduce(u.getTemplateView()
+                                                           .getGoldCost())
+                                       .woodCostToProduce(u.getTemplateView()
+                                                           .getWoodCost())
+                                       .build());
+        units.add(new UnitBuilder().initialAction(IDLE)
+                                   .validActions(IDLE, PRODUCE)
+                                   .build());
+        return new UnitTrackerBuilder().units(units).build();
     }
 
     public ResourceTracker createResourceTracker(StateView state,
@@ -103,8 +103,8 @@ public class GameState implements Comparable<GameState>
                                                  int requiredWood)
     {
         ResourceTrackerBuilder b = new ResourceTrackerBuilder();
-        return b.currentGold(state.getResourceAmount(playerNum, GOLD))
-                .currentWood(state.getResourceAmount(playerNum, WOOD))
+        return b.currentAmount(GOLD, state.getResourceAmount(playerNum, GOLD))
+                .currentAmount(WOOD, state.getResourceAmount(playerNum, WOOD))
                 .resources(getResources(state, Type.GOLD_MINE, Type.TREE))
                 .goal(new GoalBuilder<Integer>().specify("gold", requiredGold)
                                                 .specify("wood", requiredWood)
@@ -113,19 +113,19 @@ public class GameState implements Comparable<GameState>
     }
 
     // Constructor helper method
-    public List<Resource> getResources(StateView state, Type... types)
+    public Map<Resource, Integer> getResources(StateView state, Type... types)
     {
         UnitView townHall = getTownHall(state);
-        List<Resource> resources = new ArrayList<>();
+        Map<Resource, Integer> resources = new HashMap<>();
         for (Type t : types)
             for (ResourceView r : state.getResourceNodes(t))
             {
                 Resource resource;
-                double dist = distanceToTownHall(townHall, r);
-                int remaining = r.getAmountRemaining();
-                Type type = r.getType();
-                resource = new Resource(r.getID(), type, dist, remaining);
-                resources.add(resource);
+                resource = new Resource(r.getID(),
+                                        Type.getResourceType(r.getType()),
+                                        distanceToTownHall(townHall, r),
+                                        r.getAmountRemaining());
+                resources.put(resource, resource.getRemaining());
             }
         return resources;
     }
@@ -171,6 +171,14 @@ public class GameState implements Comparable<GameState>
         return getResourceTracker().isGoalSatisfied();
     }
 
+    /*
+    All present Strips.StripsEnum at the beginning of GameState instantiation
+    are the result of being set in the parent GameState. That is, upon
+    considering possible SEPIA actions, the current GameState describes what
+    is possible for the current state, as opposed to describing what will be
+    possible for the proceeding children states.
+     */
+
     /**
      * The branching factor of this search graph are much higher than the
      * planning. Generate all of the possible successor states and their
@@ -181,42 +189,76 @@ public class GameState implements Comparable<GameState>
      */
     public Set<GameState> generateChildren()
     {
-        List<DirectiveMap> possible;
-        possible = possibleDirectives(this, getSatisfied());
-        return possible.stream()
-                       .map(DirectiveMap::getDelta)
-                       .collect(Collectors.toSet());
+        /*
+        Conceptual switch statement:
+            switch(StripsEnum):
+                case DEPOSIT:
+                    1 possible action
+                case GATHER:
+                    r possible actions (r = #(resources))
+                case PRODUCE:
+                    1 possible action
+
+        Given p peasants and r resources there is, at most, p^r possible
+        actions. This worst-case occurs when all peasants are scheduled to
+        gather.
+
+        Define the "initiative" principle as:
+            If a peasant is tasked with an action then it always executes
+            that action as soon as it is able.
+         */
+        Set<GameState> children = new HashSet<>();
+        return recursiveChildren(this,
+                                 new HashSet<>(),
+                                 getUnitTracker(),
+                                 children);
     }
 
     /*
-    All Strips.ActionEnums that are present at the beginning of GameState
+    All Strips.StripsEnums that are present at the beginning of GameState
     instantiation are the result of being set in the parent GameState. That is,
     upon considering possible SEPIA actions, the current GameState describes
     what is possible for the current state, as opposed to describing what
     will be possible for the proceeding children states.
      */
-
-    /*
-     * Recursively determines which directives are satisfied and applies them
-     * all to one DirectiveMap/GameState (we did this for scalability w
-     * multiple peasants later)
-     */
-    public List<DirectiveMap> possibleDirectives(GameState current,
-                                                 EnumSet<ActionEnum> satisfiedActions)
+    public Set<GameState> recursiveChildren(GameState current,
+                                            Set<Entry<Unit, StripsEnum>> tracked,
+                                            UnitTracker tracker,
+                                            Set<GameState> children)
     {
-        List<DirectiveMap> possible = new ArrayList<>();
-        // contains all our STRIPS logic
-        current.evaluate();
-        // this is essentially a union operation:
-        // satisfiedActions U current.getSatisfied()
-        satisfiedActions.removeIf(a -> !current.getSatisfied().contains(a));
-        for (ActionEnum actionType : satisfiedActions)
+        /*
+        For each Unit, consider all possible actions it can do in the next
+        state. For each of its actions, consider all other combinations of
+        actions that other Units could make as well. Essentially, generate
+        all possible combinations of valid StripsEnum for the current state.
+         */
+        // TODO How do we merge generation and STRIPS preconditions?
+        //  preconditionsMet() and apply() could be generalized to apply a
+        //  set of Strips Actions. The process could be as follows:
+        //      -> recurse down to last untracked unit
+        //      -> at this point, 1 full StripsMap has been generated that
+        //         contains the set of actions that must be done to create
+        //         the state. This is very much like DirectiveMap but does
+        //         not have the downside of coupling.
+        //      -> do this for all possible states.
+        // TODO Make a Strips class for each of the StripsEnum so that cost,
+        //  preconditions and apply can be done for each action. Very similar
+        //  to the builder design pattern
+        Set<Entry<Unit, StripsEnum>> notTracked = tracker.getItems().entrySet();
+        notTracked.removeAll(tracked);
+        for (Entry<Unit, StripsEnum> unit : notTracked)
         {
-            DirectiveMap action = new DirectiveMap(actionType, current);
-            action.add(possibleDirectives(action.getDelta(), satisfiedActions));
-            possible.add(action);
+            for (StripsEnum next : StripsEnum.getValidNext(unit.getValue()))
+            {
+                GameState child = new GameState(current);
+                child.getUnitTracker().validateAndTrack(unit.getKey(), next);
+                children.add(child);
+                UnitTracker childTracker = child.getUnitTracker();
+                recursiveChildren(child, tracked, childTracker, children);
+            }
+            tracked.add(unit);
         }
-        return possible;
+        return children;
     }
 
     /**
@@ -236,39 +278,30 @@ public class GameState implements Comparable<GameState>
     {
         if (isGoal())
             return 0;
-        if (getResourceTracker().isGoalExceeded())
-            return Double.POSITIVE_INFINITY;
-        return getCost();
+        return getResourceTracker().getDiffFromGoal();
     }
 
     // STRIPS action
-    public void gather(Unit unit, Resource resource, int amount)
+    public void gather(Unit peasant, Resource resource, int amount)
     {
-        getUnitTracker().track(unit, GATHER);
-        getResourceTracker().update(resource, (res, remain) -> remain - amount);
+        getResourceTracker().adjustRemaining(resource, amount);
+        getUnitTracker().validateAndTrack(peasant, GATHER);
     }
 
     // STRIPS action
-    public void deposit(Unit unit, Type resourceType, int amount)
+    public void deposit(Unit peasant, ResourceType resourceType, int amount)
     {
-        getUnitTracker().track(unit, DEPOSIT);
-        getResourceTracker().adjustCurrentResource(resourceType, amount);
+        getResourceTracker().adjustCurrent(resourceType, amount);
+        getUnitTracker().validateAndTrack(peasant, DEPOSIT);
     }
 
     // STRIPS action
-    // TODO Make new peasant and track as IDLE
-    public void produce(Unit unit)
+    public void produce(Unit townHall, int goldCost, int woodCost)
     {
-        getUnitTracker().track(unit, PRODUCE);
-    }
-
-    // TODO Ensure matching and not consequence makes sense
-    public void evaluate()
-    {
-        getSatisfied().remove(EMPTY);
-        getSatisfied().addAll(getUnitTracker().getExistingStatuses());
-        if (getSatisfied().isEmpty())
-            getSatisfied().add(EMPTY);
+        getUnitTracker().createAndTrack(IDLE, IDLE, GATHER, DEPOSIT);
+        getResourceTracker().adjustCurrent(GOLD, -goldCost);
+        getResourceTracker().adjustCurrent(WOOD, -woodCost);
+        getUnitTracker().validateAndTrack(townHall, PRODUCE);
     }
 
     /**
@@ -337,12 +370,12 @@ public class GameState implements Comparable<GameState>
     @Override
     public String toString()
     {
-        String gold = "Current Gold: " + getResourceTracker().getCurrentGold();
-        String wood = "Current Wood: " + getResourceTracker().getCurrentWood();
-        String peas = "Peasants = " + (getUnitTracker().getItems().size() - 1);
-        String cost = "Cost: " + getCost();
-        String heuristic = "Heuristic: " + getHeuristicCost();
-        return gold + ", " + wood + ", " + peas + ", " + cost + ", " + heuristic;
+        String gold = "gold=" + getResourceTracker().getCurrentAmount(GOLD);
+        String wood = "wood=" + getResourceTracker().getCurrentAmount(WOOD);
+        String peas = "nPeasants = " + (getUnitTracker().getItems().size() - 1);
+        String cost = "cost=" + getCost();
+        String heuristic = "heuristic=" + getHeuristicCost();
+        return "GameState{" + cost + ", " + heuristic + ", " + gold + ", " + wood + ", " + peas + "}";
     }
 
     public UnitTracker getUnitTracker()
@@ -355,9 +388,9 @@ public class GameState implements Comparable<GameState>
         return resourceTracker;
     }
 
-    public EnumSet<ActionEnum> getSatisfied()
+    public void adjustCost(double cost)
     {
-        return satisfied;
+        setCost(getCost() + cost);
     }
 
     public void setCost(double cost)
@@ -380,308 +413,240 @@ public class GameState implements Comparable<GameState>
         this.heuristicCost = heuristicCost;
     }
 
+    public boolean considerBuildingPeasants()
+    {
+        return buildPeasants;
+    }
+
     public GameState getCameFrom()
     {
         return cameFrom;
     }
 
-    public DirectiveMap getActions()
+    public static class UnitTrackerBuilder
     {
-        return actions;
-    }
+        private List<Unit> units;
+        private List<StripsEnum> statuses;
 
-    public void setActions(DirectiveMap actions)
-    {
-        this.actions = actions;
-    }
-
-    public static class UnitTracker extends Tracker<Unit, ActionEnum>
-    {
-        public UnitTracker(Collection<Unit> units, ActionEnum defaultStatus)
+        public UnitTrackerBuilder()
         {
-            super(units, defaultStatus);
-        }
-    }
-
-    private static class ResourceTrackerBuilder
-            extends Tracker<Resource, Integer>
-    {
-        private Goal<Integer> goal;
-        private int currentGold;
-        private int currentWood;
-        private List<Integer> statuses;
-        private List<Resource> resources;
-
-        public ResourceTrackerBuilder()
-        {
-            super(new HashMap<>());
-            this.goal = new GoalBuilder<Integer>().build();
-            this.currentGold = 0;
-            this.currentWood = 0;
+            this.units = new ArrayList<>();
+            this.statuses = new ArrayList<>();
         }
 
-        public ResourceTrackerBuilder goal(Goal<Integer> goal)
+        public UnitTracker build()
         {
-            setGoal(goal);
-            return this;
+            return new UnitTracker(this);
         }
 
-        public ResourceTracker build()
+        public UnitTrackerBuilder units(List<Unit> units)
         {
-            return new ResourceTracker(getResources(),
-                                       getGoal(),
-                                       getCurrentGold(),
-                                       getCurrentWood());
-        }
-
-        public ResourceTrackerBuilder currentGold(int gold)
-        {
-            setCurrentGold(gold);
-            return this;
-        }
-
-        public ResourceTrackerBuilder currentWood(int wood)
-        {
-            setCurrentWood(wood);
-            return this;
-        }
-
-        public ResourceTrackerBuilder statuses(List<Integer> statuses)
-        {
+            setUnits(units);
+            List<StripsEnum> statuses = units.stream()
+                                             .map(Unit::getInitialAction)
+                                             .collect(Collectors.toList());
             setStatuses(statuses);
             return this;
         }
 
-        public ResourceTrackerBuilder resources(List<Resource> resources)
+        public List<Unit> getUnits()
         {
-            setResources(resources);
-            return this;
+            return units;
         }
 
-        public Goal<Integer> getGoal()
+        public void setUnits(List<Unit> units)
         {
-            return goal;
+            this.units = units;
         }
 
-        public void setGoal(Goal<Integer> goal)
-        {
-            this.goal = goal;
-        }
-
-        public int getCurrentGold()
-        {
-            return currentGold;
-        }
-
-        public void setCurrentGold(int currentGold)
-        {
-            this.currentGold = currentGold;
-        }
-
-        public int getCurrentWood()
-        {
-            return currentWood;
-        }
-
-        public void setCurrentWood(int currentWood)
-        {
-            this.currentWood = currentWood;
-        }
-
-        public List<Integer> getStatuses()
+        public List<StripsEnum> getStatuses()
         {
             return statuses;
         }
 
-        public void setStatuses(List<Integer> statuses)
+        public void setStatuses(List<StripsEnum> statuses)
         {
             this.statuses = statuses;
         }
+    }
 
-        public List<Resource> getResources()
+    public static class UnitTracker extends Tracker<Unit, StripsEnum>
+    {
+        public UnitTracker(UnitTrackerBuilder builder)
         {
-            return resources;
+            super(builder.getUnits(), builder.getStatuses());
         }
 
-        public void setResources(List<Resource> resources)
+        // Returns true if validation passed and unit was added
+        public void createAndTrack(StripsEnum initialAction,
+                                   StripsEnum... validActions)
         {
-            this.resources = resources;
+            Unit newUnit = new UnitBuilder().validActions(validActions)
+                                            .initialAction(initialAction)
+                                            .build();
+            validateAndTrack(newUnit, initialAction);
+        }
+
+        // Returns true if validation passed and unit was added
+        public void validateAndTrack(Unit unit, StripsEnum status)
+        {
+            if (unit.getValidActions().contains(status))
+                track(unit, status);
         }
     }
 
-    // Integer = amount remaining
-    private static class ResourceTracker extends Tracker<Resource, Integer>
+    public static class UnitBuilder
     {
-        private Goal<Integer> goal;
-        private int currentGold;
-        private int currentWood;
+        private EnumSet<StripsEnum> validActions;
+        private StripsEnum initialAction;
+        private int goldCostToProduce;
+        private int woodCostToProduce;
 
-        private ResourceTracker(Collection<Resource> resources,
-                                Goal<Integer> goal,
-                                int currentGold,
-                                int currentWood)
+        public UnitBuilder()
         {
-            super(resources,
-                  resources.stream()
-                           .map(Resource::getRemaining)
-                           .collect(Collectors.toList()));
-            this.goal = goal;
-            this.currentGold = currentGold;
-            this.currentWood = currentWood;
+            this.validActions = EnumSet.noneOf(StripsEnum.class);
+            this.initialAction = null;
+            this.goldCostToProduce = 0;
+            this.woodCostToProduce = 0;
         }
 
-        public boolean isGoalSatisfied()
+        public Unit build()
         {
-            Map<String, Integer> test = new HashMap<>();
-            test.put("gold", getCurrentGold());
-            test.put("wood", getCurrentWood());
-            return getGoal().isSatisfied(test);
+            return new Unit(this);
         }
 
-        public boolean isGoalExceeded()
+        public UnitBuilder validActions(StripsEnum... validActions)
         {
-            Map<String, Integer> test = new HashMap<>();
-            test.put("gold", getCurrentGold());
-            test.put("wood", getCurrentWood());
-            return getGoal().getCriteria()
-                            .values()
-                            .stream()
-                            .anyMatch(c -> test.get(c.getId()) > c.getObjective());
+            EnumSet<StripsEnum> valid = EnumSet.noneOf(StripsEnum.class);
+            valid.addAll(Arrays.asList(validActions));
+            setValidActions(valid);
+            return this;
         }
 
-        public Goal<Integer> getGoal()
+        public UnitBuilder initialAction(StripsEnum action)
         {
-            return goal;
+            setInitialAction(action);
+            return this;
         }
 
-        public int getCurrentGold()
+        public UnitBuilder goldCostToProduce(int goldCost)
         {
-            return currentGold;
+            setGoldCostToProduce(goldCost);
+            return this;
         }
 
-        public void adjustCurrentResource(Type type, int adjust)
+        public UnitBuilder woodCostToProduce(int woodCost)
         {
-            switch (type)
-            {
-                case GOLD_MINE:
-                    adjustCurrentGold(adjust);
-                case TREE:
-                    adjustCurrentWood(adjust);
-            }
+            setWoodCostToProduce(woodCost);
+            return this;
         }
 
-        public void adjustCurrentGold(int adjust)
+        public EnumSet<StripsEnum> getValidActions()
         {
-            setCurrentGold(getCurrentGold() + adjust);
+            return validActions;
         }
 
-        public void setCurrentGold(int currentGold)
+        private void setValidActions(EnumSet<StripsEnum> validActions)
         {
-            this.currentGold = currentGold;
+            this.validActions = validActions;
         }
 
-        public int getCurrentWood()
+        public StripsEnum getInitialAction()
         {
-            return currentWood;
+            return initialAction;
         }
 
-        public void adjustCurrentWood(int adjust)
+        private void setInitialAction(StripsEnum initialAction)
         {
-            setCurrentWood(getCurrentWood() + adjust);
+            this.initialAction = initialAction;
         }
 
-        public void setCurrentWood(int currentWood)
+        public int getGoldCostToProduce()
         {
-            this.currentWood = currentWood;
+            return goldCostToProduce;
+        }
+
+        public void setGoldCostToProduce(int costToProduce)
+        {
+            this.goldCostToProduce = costToProduce;
+        }
+
+        public int getWoodCostToProduce()
+        {
+            return woodCostToProduce;
+        }
+
+        public void setWoodCostToProduce(int woodCostToProduce)
+        {
+            this.woodCostToProduce = woodCostToProduce;
         }
     }
 
-    // <T, S> = type of item, status
-    private static class Tracker<T, S>
+    // Handles auto generating id. Mapping GameState to SEPIA peasants
+    // is handled in PEAgent.
+    public static class Unit
     {
-        private Map<T, S> items;
-
-        public Tracker(Map<T, S> items)
-        {
-            this.items = items;
-        }
-
-        public Tracker(Collection<T> items, S defaultStatus)
-        {
-            Map<T, S> itemMap = new HashMap<>();
-            items.forEach(i -> itemMap.put(i, defaultStatus));
-            this.items = itemMap;
-        }
-
-        public Tracker(Iterable<T> items, Iterable<S> statuses)
-        {
-            Map<T, S> itemMap = new HashMap<>();
-            Iterator<T> itemsIter = items.iterator();
-            Iterator<S> statusIter = statuses.iterator();
-            while (itemsIter.hasNext() && statusIter.hasNext())
-                itemMap.put(itemsIter.next(), statusIter.next());
-            this.items = itemMap;
-        }
-
-        public Tracker(Tracker<T, S> tracker)
-        {
-            this.items = tracker.getItems();
-        }
-
-        public Tracker()
-        {
-            this(new HashMap<>());
-        }
-
-        public void track(T item, S statusFirst)
-        {
-            getItems().put(item, statusFirst);
-        }
-
-        public void update(T item,
-                           BiFunction<? super T, ? super S, S> remapping)
-        {
-            getItems().computeIfPresent(item, remapping);
-        }
-
-        public void trackAll(Map<T, S> items)
-        {
-            getItems().putAll(items);
-        }
-
-        public boolean exists(S status)
-        {
-            return getItems().containsValue(status);
-        }
-
-        public Set<S> getExistingStatuses()
-        {
-            return new HashSet<>(getItems().values());
-        }
-
-        public Map<T, S> getItems()
-        {
-            return items;
-        }
-    }
-
-    private static class Unit
-    {
+        private static int lastAssignedId = 0;
         private final int id;
+        private final int goldCostToProduce;
+        private final int woodCostToProduce;
+        private final Set<StripsEnum> validActions;
+        private final StripsEnum initialAction;
 
-        public Unit(int id)
+        public Unit(UnitBuilder builder)
         {
-            this.id = id;
+            this.id = getNewId();
+            this.goldCostToProduce = builder.getGoldCostToProduce();
+            this.woodCostToProduce = builder.getWoodCostToProduce();
+            this.validActions = builder.getValidActions();
+            this.initialAction = builder.getInitialAction();
         }
 
-        public Unit(UnitView unit)
+        private static int getNewId()
         {
-            this(unit.getID());
+            int newId = getLastAssignedId() + 1;
+            adjustLastAssignedId(newId);
+            return newId;
         }
 
         public int getId()
         {
             return id;
+        }
+
+        public int getGoldCostToProduce()
+        {
+            return goldCostToProduce;
+        }
+
+        public int getWoodCostToProduce()
+        {
+            return woodCostToProduce;
+        }
+
+        public Set<StripsEnum> getValidActions()
+        {
+            return validActions;
+        }
+
+        public StripsEnum getInitialAction()
+        {
+            return initialAction;
+        }
+
+        private static void adjustLastAssignedId(int adjust)
+        {
+            setLastAssignedId(getLastAssignedId() + adjust);
+        }
+
+        private static int getLastAssignedId()
+        {
+            return lastAssignedId;
+        }
+
+        public static void setLastAssignedId(int lastAssigned)
+        {
+            lastAssignedId = lastAssigned;
         }
 
         @Override
@@ -702,15 +667,150 @@ public class GameState implements Comparable<GameState>
         }
     }
 
-    private static class Resource implements Comparable<Resource>
+    private static class ResourceTrackerBuilder
+    {
+        private Goal<Integer> goal;
+        private Map<ResourceType, Integer> currentAmounts;
+        private Map<Resource, Integer> resources;
+
+        public ResourceTrackerBuilder()
+        {
+            this.goal = new GoalBuilder<Integer>().build();
+            this.currentAmounts = new EnumMap<>(ResourceType.class);
+        }
+
+        public ResourceTrackerBuilder goal(Goal<Integer> goal)
+        {
+            setGoal(goal);
+            return this;
+        }
+
+        public ResourceTracker build()
+        {
+            return new ResourceTracker(this);
+        }
+
+        public ResourceTrackerBuilder currentAmount(ResourceType type,
+                                                    int amount)
+        {
+            getCurrentAmounts().put(type, amount);
+            return this;
+        }
+
+        public ResourceTrackerBuilder resources(Map<Resource, Integer> resources)
+        {
+            setResources(resources);
+            return this;
+        }
+
+        public Goal<Integer> getGoal()
+        {
+            return goal;
+        }
+
+        public void setGoal(Goal<Integer> goal)
+        {
+            this.goal = goal;
+        }
+
+        public Map<ResourceType, Integer> getCurrentAmounts()
+        {
+            return currentAmounts;
+        }
+
+        public Map<Resource, Integer> getResources()
+        {
+            return resources;
+        }
+
+        public void setResources(Map<Resource, Integer> resources)
+        {
+            this.resources = resources;
+        }
+    }
+
+    // Integer = amount remaining
+    public static class ResourceTracker extends Tracker<Resource, Integer>
+    {
+        private Goal<Integer> goal;
+        private Map<ResourceType, Integer> currentAmounts;
+
+        private ResourceTracker(ResourceTrackerBuilder builder)
+        {
+            super(builder.getResources());
+            this.goal = builder.getGoal();
+            this.currentAmounts = builder.getCurrentAmounts();
+        }
+
+        public boolean isGoalSatisfied()
+        {
+            Map<String, Integer> test = new HashMap<>();
+            test.put("gold", getCurrentAmount(GOLD));
+            test.put("wood", getCurrentAmount(WOOD));
+            return getGoal().isSatisfied(test);
+        }
+
+        public int getDiffFromGoal()
+        {
+            int goalGold = getGoal().getCriteria().get("gold").getObjective();
+            int goalWood = getGoal().getCriteria().get("wood").getObjective();
+            int goldDiff = goalGold - getCurrentAmount(GOLD);
+            int woodDiff = goalWood - getCurrentAmount(WOOD);
+            return goldDiff + woodDiff;
+        }
+
+        public boolean isGoalExceeded()
+        {
+            Map<String, Integer> test = new HashMap<>();
+            test.put("gold", getCurrentAmount(GOLD));
+            test.put("wood", getCurrentAmount(WOOD));
+            return getGoal().getCriteria()
+                            .values()
+                            .stream()
+                            .anyMatch(c -> test.get(c.getId()) > c.getObjective());
+        }
+
+        public void adjustRemaining(Resource resource, int amount)
+        {
+            resource.adjustRemaining(amount);
+            getItems().put(resource, resource.getRemaining());
+        }
+
+        public boolean hasEnough(ResourceType type, int amount)
+        {
+            return getCurrentAmount(type) >= amount;
+        }
+
+        public Goal<Integer> getGoal()
+        {
+            return goal;
+        }
+
+        public int getCurrentAmount(ResourceType type)
+        {
+            return getCurrentAmounts().get(type);
+        }
+
+        public Map<ResourceType, Integer> getCurrentAmounts()
+        {
+            return currentAmounts;
+        }
+
+        public void adjustCurrent(ResourceType type, int adjust)
+        {
+            getCurrentAmounts().merge(type, 0, (c, a) -> c - adjust);
+        }
+    }
+
+    public static class Resource implements Comparable<Resource>
     {
         private final int id;
-        private final Type type;
+        private final ResourceType type;
         private final double distanceToTownHall;
         private int remaining;
 
         private Resource(int id,
-                         Type type,
+                         ResourceType type,
                          double distanceToTownHall,
                          int remaining)
         {
@@ -718,14 +818,6 @@ public class GameState implements Comparable<GameState>
             this.type = type;
             this.distanceToTownHall = distanceToTownHall;
             this.remaining = remaining;
-        }
-
-        public Resource(ResourceView resource, double distanceToTownHall)
-        {
-            this(resource.getID(),
-                 resource.getType(),
-                 distanceToTownHall,
-                 resource.getAmountRemaining());
         }
 
         @Override
@@ -757,7 +849,7 @@ public class GameState implements Comparable<GameState>
             return id;
         }
 
-        public Type getType()
+        public ResourceType getType()
         {
             return type;
         }
@@ -782,6 +874,42 @@ public class GameState implements Comparable<GameState>
         public void setRemaining(int remaining)
         {
             this.remaining = remaining;
+        }
+    }
+
+    // <T, S> = item type, status
+    private static class Tracker<T, S>
+    {
+        private Map<T, S> items;
+
+        public Tracker(Map<T, S> items)
+        {
+            this.items = items;
+        }
+
+        public Tracker(Iterable<T> items, Iterable<S> statuses)
+        {
+            Map<T, S> itemMap = new HashMap<>();
+            Iterator<T> itemsIter = items.iterator();
+            Iterator<S> statusIter = statuses.iterator();
+            while (itemsIter.hasNext() && statusIter.hasNext())
+                itemMap.put(itemsIter.next(), statusIter.next());
+            this.items = itemMap;
+        }
+
+        public void track(T item, S statusFirst)
+        {
+            getItems().put(item, statusFirst);
+        }
+
+        public int getCount(S s)
+        {
+            return Collections.frequency(getItems().values(), s);
+        }
+
+        public Map<T, S> getItems()
+        {
+            return items;
         }
     }
 
@@ -965,297 +1093,6 @@ public class GameState implements Comparable<GameState>
         public void setObjective(T objective)
         {
             this.objective = objective;
-        }
-    }
-
-    public static class DirectiveMap extends Strips
-    {
-        private Map<Unit, Directive> directives;
-
-        private DirectiveMap(Map<Unit, Directive> directives)
-        {
-            this.directives = directives;
-        }
-
-        public DirectiveMap()
-        {
-            this(new HashMap<>());
-        }
-
-        public Map<Unit, Directive> getMap()
-        {
-            return this.directives;
-        }
-
-        @Override
-        public String toString()
-        {
-            StringBuilder me = new StringBuilder();
-            me.append("Actions:\n");
-            int i = 1;
-            for (Directive action : getMap().values())
-            {
-                me.append(String.format("   %d.) %s\n", i, action.toString()));
-                i++;
-            }
-            return me.toString();
-        }
-
-        /*
-         * this constructor handles directive implementation AND application
-         * to GameState
-         *
-         */
-        public DirectiveMap(ActionEnum type, GameState last)
-        {
-            this(new HashMap<>(), new GameState(last));
-            int unitId;
-            int resourceId;
-            ActionType action;
-            if (type == EMPTY)
-            {
-                throw new NullPointerException("Error, EMPTY enum passed to " + "DirectiveMap constructor");
-            }
-            else if (type == PRODUCE)
-                return;
-            if (type == DEPOSIT)
-            {
-                unitId = getDelta().getPeasantToDeposit();
-                resourceId = getDelta().deposit(unitId);
-                action = ActionType.COMPOUNDDEPOSIT;
-            }
-            else
-            {
-                unitId = getDelta().getPeasantToGather();
-                resourceId = getDelta().gather(type, unitId);
-                action = ActionType.COMPOUNDGATHER;
-            }
-            getMap().put(unitId,
-                         new Directive(unitId, resourceId, type, action));
-            getDelta().setCost(getDelta().getResourceToTownHall()
-                                         .get(resourceId));
-            getDelta().setActions(new DirectiveMap(getMap(), null));
-        }
-
-        /*
-         *
-         * The methods below are used to merge DirectiveMaps
-         *
-         */
-
-        // Highest level of addition
-        public boolean add(List<DirectiveMap> actions)
-        {
-            double actionsCost;
-            for (DirectiveMap actionMap : actions)
-            {
-                if (add(actionMap))
-                    return false;
-                actionsCost = actionMap.getDelta().getCost();
-                if (actionsCost > getDelta().getCost())
-                    getDelta().setCost(actionsCost);
-            }
-            return true;
-        }
-
-        // Middle level of addition
-        public boolean add(DirectiveMap actions)
-        {
-            for (Directive action : actions.getMap().values())
-                if (add(action))
-                    return false;
-            double actionsCost = actions.getDelta().getCost();
-            if (actionsCost > getDelta().getCost())
-                getDelta().setCost(actionsCost);
-            return true;
-        }
-
-        // Unit level addition
-        public boolean add(Directive action)
-        {
-            if (getMap().containsKey(action.getUnit()))
-                return false;
-            if (action.getActionType() == ActionType.COMPOUNDGATHER)
-                getDelta().gather(action.getUnit(), action.getTarget());
-            else if (action.getActionType() == ActionType.COMPOUNDDEPOSIT)
-                getDelta().deposit(action.getUnit());
-            else
-            {
-                System.out.println("ERROR MERGING ACTIONS. add(Directive)" +
-                                           ", " + "GameState" +
-                                           ".DirectiveMap");
-                return false;
-            }
-            getMap().put(action.getUnit(), action);
-            return true;
-        }
-    }
-
-    // Created to allow for optional fields, which arise when the Actions
-    // produce and build are introduced.
-    // TODO Could just have a mapping between ActionEnum and STRIPS -- saves
-    //  a redundant field
-    public static class DirectiveBuilder
-    {
-        private int unit;
-        private int target;
-        private Position position;
-        private ActionEnum type;
-
-        public DirectiveBuilder()
-        {
-            this.unit = -1;
-            this.target = -1;
-            this.position = null;
-            this.type = null;
-        }
-
-        public Directive build()
-        {
-            return new Directive(this);
-        }
-
-        public DirectiveBuilder unit(int unit)
-        {
-            setUnit(unit);
-            return this;
-        }
-
-        public DirectiveBuilder target(int target)
-        {
-            setTarget(target);
-            return this;
-        }
-
-        public DirectiveBuilder position(Position position)
-        {
-            setPosition(position);
-            return this;
-        }
-
-        public DirectiveBuilder type(ActionEnum type)
-        {
-            setType(type);
-            return this;
-        }
-
-        public int getUnit()
-        {
-            return unit;
-        }
-
-        public void setUnit(int unit)
-        {
-            this.unit = unit;
-        }
-
-        public int getTarget()
-        {
-            return target;
-        }
-
-        public void setTarget(int target)
-        {
-            this.target = target;
-        }
-
-        public Position getPosition()
-        {
-            return position;
-        }
-
-        public void setPosition(Position position)
-        {
-            this.position = position;
-        }
-
-        public ActionEnum getType()
-        {
-            return type;
-        }
-
-        public void setType(ActionEnum type)
-        {
-            this.type = type;
-        }
-    }
-
-    /*
-     * Directive holds all information needed to translate a STRIPS action to
-     *  a SEPIA action.
-     */
-    public static class Directive extends Strips
-    {
-        private int unit;
-        private int target;
-        private Position position;
-        private ActionEnum type;
-
-        private Directive(DirectiveBuilder builder)
-        {
-            this.unit = builder.getUnit();
-            this.target = builder.getTarget();
-            this.position = builder.getPosition();
-            this.type = builder.getType();
-        }
-
-        public Action createAction()
-        {
-            switch (ActionEnum.getActionType(getType()))
-            {
-                case COMPOUNDDEPOSIT:
-                    return Action.createCompoundDeposit(getUnit(), getTarget());
-                case COMPOUNDPRODUCE:
-                    return Action.createCompoundProduction(getUnit(),
-                                                           getTarget());
-                case COMPOUNDBUILD:
-                    return Action.createCompoundBuild(getUnit(),
-                                                      getTarget(),
-                                                      getPosition().getX(),
-                                                      getPosition().getY());
-                default:
-                    return Action.createCompoundGather(getUnit(), getTarget());
-            }
-        }
-
-        public int getUnit()
-        {
-            return unit;
-        }
-
-        public int getTarget()
-        {
-            return target;
-        }
-
-        public Position getPosition()
-        {
-            return position;
-        }
-
-        public ActionEnum getType()
-        {
-            return type;
-        }
-
-        @Override
-        public String toString()
-        {
-            String me;
-            switch (getType())
-            {
-                case DEPOSIT:
-                    me = "Unit %d deposits resource to TownHall %d.";
-                    break;
-                case GATHER:
-                    me = "Unit %d gathers from resource %d.";
-                    break;
-                case PRODUCE:
-                    return "TownHall produces one peasant.";
-                default:
-                    return "ERROR: invalid directive!";
-            }
-            return String.format(me, getUnit(), getTarget());
         }
     }
 }
