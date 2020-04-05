@@ -5,7 +5,7 @@ import edu.cwru.sepia.agent.planner.GameState;
 import java.util.EnumSet;
 
 // TODO This will be the way to handle multiple StripsActions in one go
-public class StripsCoordinator implements StripsAction
+public class StripsMap implements StripsAction
 {
     @Override
     public boolean preconditionsMet(GameState state)
