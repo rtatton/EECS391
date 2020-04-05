@@ -63,7 +63,7 @@ public class GameState implements Comparable<GameState>
                                                      requiredGold,
                                                      requiredWood);
         this.cost = 0;
-        this.heuristicCost = requiredGold + requiredGold;
+        this.heuristicCost = requiredGold + requiredWood;
         this.cameFrom = null;
         this.buildPeasants = buildPeasants;
     }
@@ -84,13 +84,14 @@ public class GameState implements Comparable<GameState>
         peasantUnits.removeIf(u -> u.equals(getTownHall(state)));
         List<Unit> units = new ArrayList<>();
         for (UnitView u : peasantUnits)
-            units.add(new UnitBuilder().initialAction(IDLE)
-                                       .validActions(IDLE, GATHER, DEPOSIT)
-                                       .goldCostToProduce(u.getTemplateView()
-                                                           .getGoldCost())
-                                       .woodCostToProduce(u.getTemplateView()
-                                                           .getWoodCost())
-                                       .build());
+        {
+            UnitBuilder unit = new UnitBuilder();
+            units.add(unit.initialAction(IDLE)
+                          .validActions(IDLE, GATHER, DEPOSIT)
+                          .goldCostToProduce(u.getTemplateView().getGoldCost())
+                          .woodCostToProduce(u.getTemplateView().getWoodCost())
+                          .build());
+        }
         units.add(new UnitBuilder().initialAction(IDLE)
                                    .validActions(IDLE, PRODUCE)
                                    .build());
@@ -133,15 +134,12 @@ public class GameState implements Comparable<GameState>
     // Constructor helper method
     private UnitView getTownHall(StateView state)
     {
-        Optional<UnitView> townHall;
-        townHall = state.getAllUnits()
-                        .stream()
-                        .filter(u -> u.getTemplateView()
-                                      .getName()
-                                      .equalsIgnoreCase("townhall"))
-                        .findFirst();
-        if (townHall.isPresent())
-            return townHall.get();
+        List<UnitView> units = state.getAllUnits();
+        units.removeIf(u -> !u.getTemplateView()
+                              .getName()
+                              .equalsIgnoreCase("townhall"));
+        if (units.size() > 0)
+            return units.get(0);
         else
             throw new NoSuchElementException("No town hall exists!");
     }
@@ -477,7 +475,6 @@ public class GameState implements Comparable<GameState>
             super(builder.getUnits(), builder.getStatuses());
         }
 
-        // Returns true if validation passed and unit was added
         public void createAndTrack(StripsEnum initialAction,
                                    StripsEnum... validActions)
         {
@@ -487,7 +484,6 @@ public class GameState implements Comparable<GameState>
             validateAndTrack(newUnit, initialAction);
         }
 
-        // Returns true if validation passed and unit was added
         public void validateAndTrack(Unit unit, StripsEnum status)
         {
             if (unit.getValidActions().contains(status))
@@ -605,7 +601,7 @@ public class GameState implements Comparable<GameState>
         private static int getNewId()
         {
             int newId = getLastAssignedId() + 1;
-            adjustLastAssignedId(newId);
+            setLastAssignedId(newId);
             return newId;
         }
 
@@ -634,17 +630,12 @@ public class GameState implements Comparable<GameState>
             return initialAction;
         }
 
-        private static void adjustLastAssignedId(int adjust)
-        {
-            setLastAssignedId(getLastAssignedId() + adjust);
-        }
-
         private static int getLastAssignedId()
         {
             return lastAssignedId;
         }
 
-        public static void setLastAssignedId(int lastAssigned)
+        private static void setLastAssignedId(int lastAssigned)
         {
             lastAssignedId = lastAssigned;
         }

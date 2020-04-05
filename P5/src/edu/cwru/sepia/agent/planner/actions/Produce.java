@@ -7,6 +7,8 @@ import java.util.EnumSet;
 import static edu.cwru.sepia.agent.planner.GameState.Unit;
 import static edu.cwru.sepia.agent.planner.actions.StripsEnum.IDLE;
 import static edu.cwru.sepia.agent.planner.actions.StripsEnum.PRODUCE;
+import static edu.cwru.sepia.environment.model.state.ResourceType.GOLD;
+import static edu.cwru.sepia.environment.model.state.ResourceType.WOOD;
 
 public class Produce implements StripsAction
 {
@@ -25,9 +27,15 @@ public class Produce implements StripsAction
     {
         boolean scheduled;
         boolean shouldConsider;
+        boolean hasEnoughGold;
+        boolean hasEnoughWood;
         scheduled = state.getUnitTracker().getItems().containsValue(PRODUCE);
         shouldConsider = state.considerBuildingPeasants();
-        return scheduled && shouldConsider;
+        int goldCost = getProduct().getGoldCostToProduce();
+        int woodCost = getProduct().getWoodCostToProduce();
+        hasEnoughGold = state.getResourceTracker().hasEnough(GOLD, goldCost);
+        hasEnoughWood = state.getResourceTracker().hasEnough(WOOD, woodCost);
+        return scheduled && shouldConsider && hasEnoughGold && hasEnoughWood;
     }
 
     @Override
