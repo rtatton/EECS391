@@ -64,12 +64,6 @@ public class Produce implements StripsAction
         return goldCost + woodCost;
     }
 
-    @Override
-    public StripsEnum getStripsActionType()
-    {
-        return PRODUCE;
-    }
-
     public Unit getProducer()
     {
         return producer;

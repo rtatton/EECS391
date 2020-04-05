@@ -11,18 +11,13 @@ import static edu.cwru.sepia.agent.planner.actions.StripsEnum.IDLE;
 
 public class Deposit implements StripsAction
 {
-    private final Unit depositer;
+    private final Unit depositor;
     private final Resource gatheredFrom;
 
-    public Deposit(Unit depositer, Resource gatheredFrom)
+    public Deposit(Unit depositor, Resource gatheredFrom)
     {
-        this.depositer = depositer;
+        this.depositor = depositor;
         this.gatheredFrom = gatheredFrom;
-    }
-
-    public double computeCost()
-    {
-        return getGatheredFrom().getDistanceToTownHall();
     }
 
     @Override
@@ -35,8 +30,8 @@ public class Deposit implements StripsAction
     public GameState apply(GameState state)
     {
         GameState applied = new GameState(state);
-        applied.deposit(getDepositer(), getGatheredFrom().getType(), 100);
-        applied.getUnitTracker().validateAndTrack(getDepositer(), IDLE);
+        applied.deposit(getDepositor(), getGatheredFrom().getType(), 100);
+        applied.getUnitTracker().validateAndTrack(getDepositor(), IDLE);
         return applied;
     }
 
@@ -47,14 +42,14 @@ public class Deposit implements StripsAction
     }
 
     @Override
-    public StripsEnum getStripsActionType()
+    public double computeCost()
     {
-        return DEPOSIT;
+        return getGatheredFrom().getDistanceToTownHall();
     }
 
-    public Unit getDepositer()
+    public Unit getDepositor()
     {
-        return depositer;
+        return depositor;
     }
 
     public Resource getGatheredFrom()

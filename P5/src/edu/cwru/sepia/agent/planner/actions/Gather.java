@@ -26,12 +26,6 @@ public class Gather implements StripsAction
     }
 
     @Override
-    public StripsEnum getStripsActionType()
-    {
-        return GATHER;
-    }
-
-    @Override
     public boolean preconditionsMet(GameState state)
     {
         return state.getUnitTracker().getItems().containsValue(GATHER);

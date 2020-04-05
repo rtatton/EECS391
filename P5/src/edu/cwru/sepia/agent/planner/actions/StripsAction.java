@@ -49,6 +49,4 @@ public interface StripsAction
     public EnumSet<StripsEnum> effects();
 
     public double computeCost();
-
-    public StripsEnum getStripsActionType();
 }
