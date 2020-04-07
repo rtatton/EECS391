@@ -9,6 +9,7 @@ import edu.cwru.sepia.environment.model.state.Unit.UnitView;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static edu.cwru.sepia.agent.planner.actions.StripsEnum.*;
 import static edu.cwru.sepia.environment.model.state.ResourceNode.Type;
@@ -82,19 +83,14 @@ public class GameState implements Comparable<GameState>
     {
         List<UnitView> peasantUnits = state.getAllUnits();
         peasantUnits.removeIf(u -> u.equals(getTownHall(state)));
-        List<Unit> units = new ArrayList<>();
-        for (UnitView u : peasantUnits)
-        {
-            UnitBuilder unit = new UnitBuilder();
-            units.add(unit.initialAction(IDLE)
-                          .validActions(IDLE, GATHER, DEPOSIT)
-                          .goldCostToProduce(u.getTemplateView().getGoldCost())
-                          .woodCostToProduce(u.getTemplateView().getWoodCost())
-                          .build());
-        }
-        units.add(new UnitBuilder().initialAction(IDLE)
-                                   .validActions(IDLE, PRODUCE)
-                                   .build());
+        int goldCost = peasantUnits.get(0).getTemplateView().getGoldCost();
+        int woodCost = peasantUnits.get(0).getTemplateView().getWoodCost();
+        UnitBuilder u = new UnitBuilder();
+        List<Unit> units = new ArrayList<>(u.validActions(GATHER, DEPOSIT)
+                                            .goldCostToProduce(goldCost)
+                                            .woodCostToProduce(woodCost)
+                                            .build(peasantUnits.size()));
+        units.add(u.validActions(PRODUCE).build());
         return new UnitTrackerBuilder().units(units).build();
     }
 
@@ -230,18 +226,7 @@ public class GameState implements Comparable<GameState>
         actions that other Units could make as well. Essentially, generate
         all possible combinations of valid StripsEnum for the current state.
          */
-        // TODO How do we merge generation and STRIPS preconditions?
-        //  preconditionsMet() and apply() could be generalized to apply a
-        //  set of Strips Actions. The process could be as follows:
-        //      -> recurse down to last untracked unit
-        //      -> at this point, 1 full StripsMap has been generated that
-        //         contains the set of actions that must be done to create
-        //         the state. This is very much like DirectiveMap but does
-        //         not have the downside of coupling.
-        //      -> do this for all possible states.
-        // TODO Make a Strips class for each of the StripsEnum so that cost,
-        //  preconditions and apply can be done for each action. Very similar
-        //  to the builder design pattern
+        // TODO Make StripsMap
         Set<Entry<Unit, StripsEnum>> notTracked = tracker.getItems().entrySet();
         notTracked.removeAll(tracked);
         for (Entry<Unit, StripsEnum> unit : notTracked)
@@ -296,7 +281,7 @@ public class GameState implements Comparable<GameState>
     // STRIPS action
     public void produce(Unit townHall, int goldCost, int woodCost)
     {
-        getUnitTracker().createAndTrack(IDLE, IDLE, GATHER, DEPOSIT);
+        getUnitTracker().createAndTrack(IDLE, GATHER, DEPOSIT);
         getResourceTracker().adjustCurrent(GOLD, -goldCost);
         getResourceTracker().adjustCurrent(WOOD, -woodCost);
         getUnitTracker().validateAndTrack(townHall, PRODUCE);
@@ -508,7 +493,17 @@ public class GameState implements Comparable<GameState>
 
         public Unit build()
         {
+            if (getInitialAction() == null)
+                setInitialAction(IDLE);
+            getValidActions().add(getInitialAction());
             return new Unit(this);
+        }
+
+        public List<Unit> build(int nCopies)
+        {
+            return IntStream.range(0, nCopies)
+                            .mapToObj(i -> build())
+                            .collect(Collectors.toList());
         }
 
         public UnitBuilder validActions(StripsEnum... validActions)
@@ -655,6 +650,19 @@ public class GameState implements Comparable<GameState>
         public int hashCode()
         {
             return Objects.hash(getId());
+        }
+
+        @Override
+        public String toString()
+        {
+            return String.format(
+                    "Unit{id=%d, goldCostToProduce=%d, woodCostToProduce=%d, "
+                            + "validActions=%s, initialAction=%s}",
+                    id,
+                    goldCostToProduce,
+                    woodCostToProduce,
+                    validActions,
+                    initialAction);
         }
     }
 
@@ -855,7 +863,6 @@ public class GameState implements Comparable<GameState>
             return remaining;
         }
 
-        // returns true if remaining <= 0 after adjustment
         public void adjustRemaining(int remaining)
         {
             setRemaining(getRemaining() + remaining);
@@ -892,9 +899,10 @@ public class GameState implements Comparable<GameState>
             getItems().put(item, statusFirst);
         }
 
-        public boolean containsAny(S...s)
+        @SafeVarargs
+        public final boolean containsAny(S... s)
         {
-           return Arrays.stream(s).anyMatch(this::contains);
+            return Arrays.stream(s).anyMatch(this::contains);
         }
 
         public boolean contains(S s)
@@ -905,6 +913,12 @@ public class GameState implements Comparable<GameState>
         public Map<T, S> getItems()
         {
             return items;
+        }
+
+        @Override
+        public String toString()
+        {
+            return "Tracker{" + "items=" + items + '}';
         }
     }
 
@@ -1011,10 +1025,10 @@ public class GameState implements Comparable<GameState>
         private final String id;
         private T objective;
 
-        public Criterion(String id, T objective)
+        public Criterion(CriterionBuilder<T> builder)
         {
-            this.id = id;
-            this.objective = objective;
+            this.id = builder.getId();
+            this.objective = builder.getObjective();
         }
 
         @Override
@@ -1067,7 +1081,7 @@ public class GameState implements Comparable<GameState>
 
         public Criterion<T> build()
         {
-            return new Criterion<>(getId(), getObjective());
+            return new Criterion<T>(this);
         }
 
         public String getId()
