@@ -48,5 +48,8 @@ public interface StripsAction
 
     public EnumSet<StripsEnum> effects();
 
-    public double computeCost();
+    public long computeCostFactor();
+
+    @Override
+    public int hashCode();
 }

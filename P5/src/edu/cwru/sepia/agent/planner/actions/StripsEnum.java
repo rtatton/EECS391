@@ -4,24 +4,26 @@ import edu.cwru.sepia.action.ActionType;
 
 import java.util.EnumSet;
 
+
+// Add BUILD to DEPOSIT, IDLE
 public enum StripsEnum
 {
-    BUILD, DEPOSIT, GATHER, IDLE, PRODUCE;
+    DEPOSIT, GATHER, IDLE, PRODUCE;
 
     public static EnumSet<StripsEnum> getValidNext(StripsEnum action)
     {
         switch (action)
         {
             case GATHER:
-                return EnumSet.of(IDLE, DEPOSIT);
+                return EnumSet.of(DEPOSIT);
             case DEPOSIT:
-                return EnumSet.of(IDLE, GATHER, BUILD);
+                return EnumSet.of(IDLE, GATHER);
             case IDLE:
-                return EnumSet.of(IDLE, GATHER, PRODUCE, BUILD);
+                return EnumSet.of(IDLE, GATHER, PRODUCE);
             case PRODUCE:
                 return EnumSet.of(IDLE, PRODUCE);
-            case BUILD:
-                return EnumSet.of(IDLE, BUILD, GATHER);
+           // case BUILD:
+           //     return EnumSet.of(IDLE, BUILD, GATHER);
             default:
                 return EnumSet.of(IDLE);
         }
@@ -35,8 +37,8 @@ public enum StripsEnum
                 return ActionType.COMPOUNDDEPOSIT;
             case PRODUCE:
                 return ActionType.COMPOUNDPRODUCE;
-            case BUILD:
-                return ActionType.COMPOUNDBUILD;
+           // case BUILD:
+           //     return ActionType.COMPOUNDBUILD;
             case GATHER:
                 return ActionType.COMPOUNDGATHER;
             default:

@@ -12,37 +12,34 @@ import static edu.cwru.sepia.environment.model.state.ResourceType.WOOD;
 
 public class Produce implements StripsAction
 {
-    private Unit producer;
-    private Unit product;
+    private final Unit producer;
+    private final int goldCost;
+    private final int woodCost;
 
-    public Produce(Unit producer, Unit product)
+    public Produce(Unit producer, int goldCost, int woodCost)
     {
         this.producer = producer;
-        this.product = product;
+        this.goldCost = goldCost;
+        this.woodCost = woodCost;
     }
 
     @Override
     public boolean preconditionsMet(GameState state)
     {
-        boolean scheduled = state.getUnitTracker().containsAny(PRODUCE, IDLE);
+        boolean scheduled = state.getUnitTracker().containsAnyValue(PRODUCE, IDLE);
         boolean shouldConsider = state.considerBuildingPeasants();
-        int goldCost = getProduct().getGoldCostToProduce();
-        int woodCost = getProduct().getWoodCostToProduce();
-        boolean hasEnoughGold =
-                state.getResourceTracker().hasEnough(GOLD, goldCost);
-        boolean hasEnoughWood =
-                state.getResourceTracker().hasEnough(WOOD, woodCost);
-        return scheduled && shouldConsider && hasEnoughGold && hasEnoughWood;
+        boolean enoughGold;
+        enoughGold = state.getResourceTracker().hasEnough(GOLD, getGoldCost());
+        boolean enoughWood;
+        enoughWood = state.getResourceTracker().hasEnough(WOOD, getWoodCost());
+        return scheduled && shouldConsider && enoughGold && enoughWood;
     }
 
     @Override
     public GameState apply(GameState state)
     {
-        GameState applied = new GameState(state);
-        applied.produce(getProducer(),
-                        getProduct().getGoldCostToProduce(),
-                        getProduct().getWoodCostToProduce());
-        applied.getUnitTracker().validateAndTrack(getProducer(), IDLE);
+        GameState applied = state.copy();
+        applied.produce(getProducer(), getGoldCost(), getWoodCost());
         return applied;
     }
 
@@ -52,13 +49,10 @@ public class Produce implements StripsAction
         return StripsEnum.getValidNext(PRODUCE);
     }
 
-    // TODO Modify for division effect
     @Override
-    public double computeCost()
+    public long computeCostFactor()
     {
-        int goldCost = getProduct().getGoldCostToProduce();
-        int woodCost = getProduct().getWoodCostToProduce();
-        return goldCost + woodCost;
+        return (long) 0.5;
     }
 
     public Unit getProducer()
@@ -66,8 +60,13 @@ public class Produce implements StripsAction
         return producer;
     }
 
-    public Unit getProduct()
+    public int getGoldCost()
     {
-        return product;
+        return goldCost;
+    }
+
+    public int getWoodCost()
+    {
+        return woodCost;
     }
 }

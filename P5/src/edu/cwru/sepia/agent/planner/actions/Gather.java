@@ -6,7 +6,8 @@ import edu.cwru.sepia.agent.planner.GameState.Unit;
 
 import java.util.EnumSet;
 
-import static edu.cwru.sepia.agent.planner.actions.StripsEnum.*;
+import static edu.cwru.sepia.agent.planner.actions.StripsEnum.GATHER;
+import static edu.cwru.sepia.agent.planner.actions.StripsEnum.IDLE;
 
 public class Gather implements StripsAction
 {
@@ -19,23 +20,22 @@ public class Gather implements StripsAction
         this.gatherFrom = gatherFrom;
     }
 
-    public double computeCost()
+    public long computeCostFactor()
     {
-        return getGatherFrom().getDistanceToTownHall();
+        return (long) getGatherFrom().getDistanceToTownHall();
     }
 
     @Override
     public boolean preconditionsMet(GameState state)
     {
-        return state.getUnitTracker().containsAny(GATHER, IDLE);
+        return state.getUnitTracker().containsAnyValue(GATHER, IDLE);
     }
 
     @Override
     public GameState apply(GameState state)
     {
-        GameState applied = new GameState(state);
+        GameState applied = state.copy();
         applied.gather(getGatherer(), getGatherFrom(), 100);
-        applied.getUnitTracker().validateAndTrack(getGatherer(), DEPOSIT);
         return applied;
     }
 

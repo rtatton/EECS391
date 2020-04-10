@@ -7,31 +7,31 @@ import edu.cwru.sepia.agent.planner.GameState.Unit;
 import java.util.EnumSet;
 
 import static edu.cwru.sepia.agent.planner.actions.StripsEnum.DEPOSIT;
-import static edu.cwru.sepia.agent.planner.actions.StripsEnum.IDLE;
 
 public class Deposit implements StripsAction
 {
     private final Unit depositor;
     private final Resource gatheredFrom;
+    private final int amount;
 
-    public Deposit(Unit depositor, Resource gatheredFrom)
+    public Deposit(Unit depositor, Resource gatheredFrom, int amount)
     {
         this.depositor = depositor;
         this.gatheredFrom = gatheredFrom;
+        this.amount = amount;
     }
 
     @Override
     public boolean preconditionsMet(GameState state)
     {
-        return state.getUnitTracker().getItems().containsValue(DEPOSIT);
+        return state.getUnitTracker().containsValue(DEPOSIT);
     }
 
     @Override
     public GameState apply(GameState state)
     {
-        GameState applied = new GameState(state);
-        applied.deposit(getDepositor(), getGatheredFrom().getType(), 100);
-        applied.getUnitTracker().validateAndTrack(getDepositor(), IDLE);
+        GameState applied = state.copy();
+        applied.deposit(getDepositor(), getGatheredFrom(), 100);
         return applied;
     }
 
@@ -42,9 +42,9 @@ public class Deposit implements StripsAction
     }
 
     @Override
-    public double computeCost()
+    public long computeCostFactor()
     {
-        return getGatheredFrom().getDistanceToTownHall();
+        return (long) getGatheredFrom().getDistanceToTownHall();
     }
 
     public Unit getDepositor()
@@ -57,4 +57,8 @@ public class Deposit implements StripsAction
         return gatheredFrom;
     }
 
+    public int getAmount()
+    {
+        return amount;
+    }
 }

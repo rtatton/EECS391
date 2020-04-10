@@ -1,5 +1,6 @@
 package edu.cwru.sepia.agent.planner;
 
+import edu.cwru.sepia.agent.planner.actions.StripsActionSet;
 import edu.cwru.sepia.agent.planner.actions.StripsEnum;
 import edu.cwru.sepia.environment.model.state.ResourceNode.ResourceView;
 import edu.cwru.sepia.environment.model.state.ResourceType;
@@ -32,10 +33,12 @@ public class GameState implements Comparable<GameState>
 {
     private UnitTracker unitTracker;
     private ResourceTracker resourceTracker;
+    private VisitTracker visitTracker;
     private double cost;
     private double heuristicCost;
     private boolean buildPeasants;
     private GameState cameFrom;
+    private StripsActionSet creationActions;
 
     /**
      * Construct a GameState from a stateview object. This is used to
@@ -63,20 +66,27 @@ public class GameState implements Comparable<GameState>
                                                      playernum,
                                                      requiredGold,
                                                      requiredWood);
+        this.visitTracker = new VisitTracker();
         this.cost = 0;
         this.heuristicCost = requiredGold + requiredWood;
-        this.cameFrom = null;
         this.buildPeasants = buildPeasants;
+        this.cameFrom = null;
+        this.creationActions = new StripsActionSet();
     }
 
     // Copy constructor. Used most of the time.
-    public GameState(GameState gameState)
+    private GameState(GameState gameState)
     {
-        this.resourceTracker = gameState.getResourceTracker();
-        this.unitTracker = gameState.getUnitTracker();
+        this.resourceTracker = gameState.getResourceTracker().copy();
+        this.unitTracker = gameState.getUnitTracker().copy();
         this.cost = gameState.getCost();
         this.heuristicCost = gameState.getHeuristicCost();
         this.cameFrom = gameState;
+    }
+
+    public GameState copy()
+    {
+        return new GameState(this);
     }
 
     public UnitTracker createUnitTracker(StateView state)
@@ -183,29 +193,15 @@ public class GameState implements Comparable<GameState>
      */
     public Set<GameState> generateChildren()
     {
-        /*
-        Conceptual switch statement:
-            switch(StripsEnum):
-                case DEPOSIT:
-                    1 possible action
-                case GATHER:
-                    r possible actions (r = #(resources))
-                case PRODUCE:
-                    1 possible action
-
-        Given p peasants and r resources there is, at most, p^r possible
-        actions. This worst-case occurs when all peasants are scheduled to
-        gather.
-
-        Define the "initiative" principle as:
-            If a peasant is tasked with an action then it always executes
-            that action as soon as it is able.
-         */
         Set<GameState> children = new HashSet<>();
+        Deque<Entry<Unit, StripsEnum>> remaining;
+        remaining = new ArrayDeque<>(getUnitTracker().getItems().entrySet());
+        Entry<Unit, StripsEnum> first = remaining.pop();
         return recursiveChildren(this,
-                                 new HashSet<>(),
-                                 getUnitTracker(),
-                                 children);
+                                 remaining,
+                                 first,
+                                 children,
+                                 new StripsActionSet());
     }
 
     /*
@@ -216,31 +212,11 @@ public class GameState implements Comparable<GameState>
     will be possible for the proceeding children states.
      */
     public Set<GameState> recursiveChildren(GameState current,
-                                            Set<Entry<Unit, StripsEnum>> tracked,
-                                            UnitTracker tracker,
-                                            Set<GameState> children)
+                                            Deque<Entry<Unit, StripsEnum>> remaining,
+                                            Entry<Unit, StripsEnum> currentUnit,
+                                            Set<GameState> children,
+                                            StripsActionSet actions)
     {
-        /*
-        For each Unit, consider all possible actions it can do in the next
-        state. For each of its actions, consider all other combinations of
-        actions that other Units could make as well. Essentially, generate
-        all possible combinations of valid StripsEnum for the current state.
-         */
-        // TODO Make StripsMap
-        Set<Entry<Unit, StripsEnum>> notTracked = tracker.getItems().entrySet();
-        notTracked.removeAll(tracked);
-        for (Entry<Unit, StripsEnum> unit : notTracked)
-        {
-            for (StripsEnum next : StripsEnum.getValidNext(unit.getValue()))
-            {
-                GameState child = new GameState(current);
-                child.getUnitTracker().validateAndTrack(unit.getKey(), next);
-                children.add(child);
-                UnitTracker childTracker = child.getUnitTracker();
-                recursiveChildren(child, tracked, childTracker, children);
-            }
-            tracked.add(unit);
-        }
         return children;
     }
 
@@ -269,12 +245,14 @@ public class GameState implements Comparable<GameState>
     {
         getResourceTracker().adjustRemaining(resource, amount);
         getUnitTracker().validateAndTrack(peasant, GATHER);
+        getVisitTracker().track(peasant, resource);
     }
 
     // STRIPS action
-    public void deposit(Unit peasant, ResourceType resourceType, int amount)
+    public void deposit(Unit peasant, Resource resource, int amount)
     {
-        getResourceTracker().adjustCurrent(resourceType, amount);
+        getVisitTracker().getItems().get(peasant);
+        getResourceTracker().adjustCurrent(resource.getType(), amount);
         getUnitTracker().validateAndTrack(peasant, DEPOSIT);
     }
 
@@ -285,6 +263,12 @@ public class GameState implements Comparable<GameState>
         getResourceTracker().adjustCurrent(GOLD, -goldCost);
         getResourceTracker().adjustCurrent(WOOD, -woodCost);
         getUnitTracker().validateAndTrack(townHall, PRODUCE);
+    }
+
+    // STRIPS action
+    public void idle(Unit unit)
+    {
+        getUnitTracker().validateAndTrack(unit, IDLE);
     }
 
     /**
@@ -371,6 +355,11 @@ public class GameState implements Comparable<GameState>
         return resourceTracker;
     }
 
+    public VisitTracker getVisitTracker()
+    {
+        return visitTracker;
+    }
+
     public void adjustCost(double cost)
     {
         setCost(getCost() + cost);
@@ -453,11 +442,26 @@ public class GameState implements Comparable<GameState>
         }
     }
 
+    public StripsActionSet getCreationActions()
+    {
+        return creationActions;
+    }
+
     public static class UnitTracker extends Tracker<Unit, StripsEnum>
     {
-        public UnitTracker(UnitTrackerBuilder builder)
+        private UnitTracker(UnitTrackerBuilder builder)
         {
             super(builder.getUnits(), builder.getStatuses());
+        }
+
+        private UnitTracker(UnitTracker tracker)
+        {
+            super(new HashMap<>(tracker.getItems()));
+        }
+
+        public UnitTracker copy()
+        {
+            return new UnitTracker(this);
         }
 
         public void createAndTrack(StripsEnum initialAction,
@@ -584,13 +588,27 @@ public class GameState implements Comparable<GameState>
         private final Set<StripsEnum> validActions;
         private final StripsEnum initialAction;
 
-        public Unit(UnitBuilder builder)
+        private Unit(UnitBuilder builder)
         {
             this.id = getNewId();
             this.goldCostToProduce = builder.getGoldCostToProduce();
             this.woodCostToProduce = builder.getWoodCostToProduce();
             this.validActions = builder.getValidActions();
             this.initialAction = builder.getInitialAction();
+        }
+
+        private Unit(Unit unit)
+        {
+            this.id = unit.getId();
+            this.goldCostToProduce = unit.getGoldCostToProduce();
+            this.woodCostToProduce = unit.getWoodCostToProduce();
+            this.validActions = unit.getValidActions();
+            this.initialAction = unit.getInitialAction();
+        }
+
+        public Unit copy()
+        {
+            return new Unit(this);
         }
 
         private static int getNewId()
@@ -663,6 +681,29 @@ public class GameState implements Comparable<GameState>
                     woodCostToProduce,
                     validActions,
                     initialAction);
+        }
+    }
+
+    private static class VisitTracker extends Tracker<Unit, Resource>
+    {
+        public VisitTracker(Map<Unit, Resource> items)
+        {
+            super(items);
+        }
+
+        public VisitTracker(VisitTracker visitTracker)
+        {
+            super(new HashMap<>(visitTracker.getItems()));
+        }
+
+        public VisitTracker()
+        {
+            super(new HashMap<>());
+        }
+
+        public VisitTracker copy()
+        {
+            return new VisitTracker(this);
         }
     }
 
@@ -741,6 +782,18 @@ public class GameState implements Comparable<GameState>
             this.currentAmounts = builder.getCurrentAmounts();
         }
 
+        private ResourceTracker(ResourceTracker resourceTracker)
+        {
+            super(resourceTracker.getItems());
+            this.goal = resourceTracker.getGoal().copy();
+            this.currentAmounts = resourceTracker.getCurrentAmounts();
+        }
+
+        public ResourceTracker copy()
+        {
+            return new ResourceTracker(this);
+        }
+
         public boolean isGoalSatisfied()
         {
             Map<String, Integer> test = new HashMap<>();
@@ -817,6 +870,19 @@ public class GameState implements Comparable<GameState>
             this.type = type;
             this.distanceToTownHall = distanceToTownHall;
             this.remaining = remaining;
+        }
+
+        private Resource(Resource resource)
+        {
+            this(resource.getId(),
+                 resource.getType(),
+                 resource.getDistanceToTownHall(),
+                 resource.getRemaining());
+        }
+
+        public Resource copy()
+        {
+            return new Resource(this);
         }
 
         @Override
@@ -900,14 +966,19 @@ public class GameState implements Comparable<GameState>
         }
 
         @SafeVarargs
-        public final boolean containsAny(S... s)
+        public final boolean containsAnyValue(S... s)
         {
-            return Arrays.stream(s).anyMatch(this::contains);
+            return Arrays.stream(s).anyMatch(this::containsValue);
         }
 
-        public boolean contains(S s)
+        public boolean containsValue(S s)
         {
             return getItems().containsValue(s);
+        }
+
+        public boolean containsKey(T t)
+        {
+            return getItems().containsKey(t);
         }
 
         public Map<T, S> getItems()
@@ -945,7 +1016,22 @@ public class GameState implements Comparable<GameState>
             this.criteria = builder.getCriteria();
         }
 
-        @Override
+        private Goal(Goal<T> goal)
+        {
+            Map<String, Criterion<T>> copiedCriteria = new HashMap<>();
+            Set<Entry<String, Criterion<T>>> toCopy;
+            toCopy = goal.getCriteria().entrySet();
+            for (Entry<String, Criterion<T>> criterion : toCopy)
+                copiedCriteria.put(criterion.getKey(),
+                                   criterion.getValue().copy());
+            this.criteria = copiedCriteria;
+        }
+
+        public Goal<T> copy()
+        {
+            return new Goal<T>(this);
+        }
+
         public boolean isSatisfied(Map<String, T> test)
         {
             if (hasMissingTestValues(test))
@@ -1031,12 +1117,24 @@ public class GameState implements Comparable<GameState>
             this.objective = builder.getObjective();
         }
 
+        public Criterion(Criterion<T> criterion)
+        {
+            this.id = criterion.getId();
+            this.objective = criterion.getObjective();
+        }
+
+        public Criterion<T> copy()
+        {
+            return new Criterion<>(this);
+        }
+
         @Override
         public boolean isSatisfied(Map<String, T> test)
         {
+            boolean satisfied = false;
             if (test.containsKey(getId()))
-                return test.get(getId()).equals(getObjective());
-            return false;
+                satisfied = test.get(getId()).equals(getObjective());
+            return satisfied;
         }
 
         public String getId()
