@@ -1,5 +1,7 @@
 package edu.cwru.sepia.agent.planner;
 
+import edu.cwru.sepia.agent.planner.actions.Idle;
+import edu.cwru.sepia.agent.planner.actions.StripsAction;
 import edu.cwru.sepia.agent.planner.actions.StripsActionSet;
 import edu.cwru.sepia.agent.planner.actions.StripsEnum;
 import edu.cwru.sepia.environment.model.state.ResourceNode.ResourceView;
@@ -34,8 +36,6 @@ public class GameState implements Comparable<GameState>
     private UnitTracker unitTracker;
     private ResourceTracker resourceTracker;
     private VisitTracker visitTracker;
-    private double cost;
-    private double heuristicCost;
     private boolean buildPeasants;
     private GameState cameFrom;
     private StripsActionSet creationActions;
@@ -67,21 +67,19 @@ public class GameState implements Comparable<GameState>
                                                      requiredGold,
                                                      requiredWood);
         this.visitTracker = new VisitTracker();
-        this.cost = 0;
-        this.heuristicCost = requiredGold + requiredWood;
         this.buildPeasants = buildPeasants;
         this.cameFrom = null;
         this.creationActions = new StripsActionSet();
     }
 
-    // Copy constructor. Used most of the time.
     private GameState(GameState gameState)
     {
-        this.resourceTracker = gameState.getResourceTracker().copy();
         this.unitTracker = gameState.getUnitTracker().copy();
-        this.cost = gameState.getCost();
-        this.heuristicCost = gameState.getHeuristicCost();
+        this.resourceTracker = gameState.getResourceTracker().copy();
+        this.visitTracker = gameState.getVisitTracker().copy();
+        this.buildPeasants = gameState.considerBuildingPeasants();
         this.cameFrom = gameState;
+        this.creationActions = gameState.getCreationActions().copy();
     }
 
     public GameState copy()
@@ -193,15 +191,12 @@ public class GameState implements Comparable<GameState>
      */
     public Set<GameState> generateChildren()
     {
-        Set<GameState> children = new HashSet<>();
-        Deque<Entry<Unit, StripsEnum>> remaining;
-        remaining = new ArrayDeque<>(getUnitTracker().getItems().entrySet());
-        Entry<Unit, StripsEnum> first = remaining.pop();
-        return recursiveChildren(this,
-                                 remaining,
-                                 first,
-                                 children,
-                                 new StripsActionSet());
+        Set<GameState> children;
+        if (getCameFrom() == null)
+            children = initialChildren();
+        else
+            children = null;
+        return children;
     }
 
     /*
@@ -211,13 +206,44 @@ public class GameState implements Comparable<GameState>
     what is possible for the current state, as opposed to describing what
     will be possible for the proceeding children states.
      */
-    public Set<GameState> recursiveChildren(GameState current,
-                                            Deque<Entry<Unit, StripsEnum>> remaining,
-                                            Entry<Unit, StripsEnum> currentUnit,
-                                            Set<GameState> children,
-                                            StripsActionSet actions)
+    public Set<GameState> initialChildren()
     {
-        return children;
+        Set<StripsActionSet> initialActionSets;
+        initialActionSets = recursiveActionSets(initialActions(),
+                                                0,
+                                                new StripsActionSet(),
+                                                new HashSet<>());
+        return initialActionSets.stream()
+                                .map(s -> s.apply(this))
+                                .collect(Collectors.toSet());
+    }
+
+    public Set<StripsActionSet> recursiveActionSets(List<StripsAction> allActions,
+                                                    int iCurrentUnit,
+                                                    StripsActionSet inProgress,
+                                                    Set<StripsActionSet> finished)
+    {
+        for (StripsAction effect : allActions.get(iCurrentUnit).effects(this))
+            if (iCurrentUnit == allActions.size() - 1)
+                finished.add(inProgress);
+            else
+            {
+                inProgress.getActions().add(effect);
+                recursiveActionSets(allActions,
+                                    iCurrentUnit + 1,
+                                    inProgress,
+                                    finished);
+            }
+        return finished;
+    }
+
+    public List<StripsAction> initialActions()
+    {
+        return getUnitTracker().getItems()
+                               .keySet()
+                               .stream()
+                               .map(Idle::new)
+                               .collect(Collectors.toList());
     }
 
     /**
@@ -249,10 +275,10 @@ public class GameState implements Comparable<GameState>
     }
 
     // STRIPS action
-    public void deposit(Unit peasant, Resource resource, int amount)
+    public void deposit(Unit peasant, int amount)
     {
-        getVisitTracker().getItems().get(peasant);
-        getResourceTracker().adjustCurrent(resource.getType(), amount);
+        ResourceType type = getVisitTracker().getItems().get(peasant).getType();
+        getResourceTracker().adjustCurrent(type, amount);
         getUnitTracker().validateAndTrack(peasant, DEPOSIT);
     }
 
@@ -280,7 +306,7 @@ public class GameState implements Comparable<GameState>
      */
     public double getCost()
     {
-        return cost;
+        return getCreationActions().computeCostFactor();
     }
 
     /**
@@ -295,7 +321,9 @@ public class GameState implements Comparable<GameState>
     @Override
     public int compareTo(GameState gameState)
     {
-        return Double.compare(getHeuristicCost(), gameState.getHeuristicCost());
+        double thisEvalCost = getCost() + heuristic();
+        double thatEvalCost = gameState.getCost() + gameState.heuristic();
+        return Double.compare(thisEvalCost, thatEvalCost);
     }
 
     /**
@@ -331,7 +359,7 @@ public class GameState implements Comparable<GameState>
     @Override
     public int hashCode()
     {
-        return 0;
+        return Objects.hash(getUnitTracker(), getResourceTracker());
     }
 
     @Override
@@ -341,7 +369,7 @@ public class GameState implements Comparable<GameState>
         String wood = "wood=" + getResourceTracker().getCurrentAmount(WOOD);
         String peas = "nPeasants = " + (getUnitTracker().getItems().size() - 1);
         String cost = "cost=" + getCost();
-        String heuristic = "heuristic=" + getHeuristicCost();
+        String heuristic = "heuristic=" + heuristic();
         return "GameState{" + cost + ", " + heuristic + ", " + gold + ", " + wood + ", " + peas + "}";
     }
 
@@ -358,31 +386,6 @@ public class GameState implements Comparable<GameState>
     public VisitTracker getVisitTracker()
     {
         return visitTracker;
-    }
-
-    public void adjustCost(double cost)
-    {
-        setCost(getCost() + cost);
-    }
-
-    public void setCost(double cost)
-    {
-        this.cost = cost;
-    }
-
-    public double getHeuristicCost()
-    {
-        return heuristicCost;
-    }
-
-    public void setHeuristic()
-    {
-        setHeuristicCost(heuristic());
-    }
-
-    public void setHeuristicCost(double heuristicCost)
-    {
-        this.heuristicCost = heuristicCost;
     }
 
     public boolean considerBuildingPeasants()
@@ -686,14 +689,10 @@ public class GameState implements Comparable<GameState>
 
     private static class VisitTracker extends Tracker<Unit, Resource>
     {
-        public VisitTracker(Map<Unit, Resource> items)
-        {
-            super(items);
-        }
 
         public VisitTracker(VisitTracker visitTracker)
         {
-            super(new HashMap<>(visitTracker.getItems()));
+            super(visitTracker);
         }
 
         public VisitTracker()
@@ -784,9 +783,10 @@ public class GameState implements Comparable<GameState>
 
         private ResourceTracker(ResourceTracker resourceTracker)
         {
-            super(resourceTracker.getItems());
+            super(resourceTracker);
             this.goal = resourceTracker.getGoal().copy();
-            this.currentAmounts = resourceTracker.getCurrentAmounts();
+            this.currentAmounts =
+                    new HashMap<>(resourceTracker.getCurrentAmounts());
         }
 
         public ResourceTracker copy()
@@ -811,17 +811,6 @@ public class GameState implements Comparable<GameState>
             return goldDiff + woodDiff;
         }
 
-        public boolean isGoalExceeded()
-        {
-            Map<String, Integer> test = new HashMap<>();
-            test.put("gold", getCurrentAmount(GOLD));
-            test.put("wood", getCurrentAmount(WOOD));
-            return getGoal().getCriteria()
-                            .values()
-                            .stream()
-                            .anyMatch(c -> test.get(c.getId()) > c.getObjective());
-        }
-
         public void adjustRemaining(Resource resource, int amount)
         {
             resource.adjustRemaining(amount);
@@ -831,6 +820,11 @@ public class GameState implements Comparable<GameState>
         public boolean hasEnough(ResourceType type, int amount)
         {
             return getCurrentAmount(type) >= amount;
+        }
+
+        public Set<Resource> getResources()
+        {
+            return getItems().keySet();
         }
 
         public Goal<Integer> getGoal()
@@ -861,45 +855,15 @@ public class GameState implements Comparable<GameState>
         private final double distanceToTownHall;
         private int remaining;
 
-        private Resource(int id,
-                         ResourceType type,
-                         double distanceToTownHall,
-                         int remaining)
+        public Resource(int id,
+                        ResourceType type,
+                        double distanceToTownHall,
+                        int remaining)
         {
             this.id = id;
             this.type = type;
             this.distanceToTownHall = distanceToTownHall;
             this.remaining = remaining;
-        }
-
-        private Resource(Resource resource)
-        {
-            this(resource.getId(),
-                 resource.getType(),
-                 resource.getDistanceToTownHall(),
-                 resource.getRemaining());
-        }
-
-        public Resource copy()
-        {
-            return new Resource(this);
-        }
-
-        @Override
-        public boolean equals(Object o)
-        {
-            if (this == o)
-                return true;
-            if (o == null || getClass() != o.getClass())
-                return false;
-            Resource resource = (Resource) o;
-            return getId() == resource.getId();
-        }
-
-        @Override
-        public int hashCode()
-        {
-            return Objects.hash(getId());
         }
 
         @Override
@@ -938,6 +902,23 @@ public class GameState implements Comparable<GameState>
         {
             this.remaining = remaining;
         }
+
+        @Override
+        public boolean equals(Object o)
+        {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+            Resource resource = (Resource) o;
+            return getId() == resource.getId();
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(getId());
+        }
     }
 
     // <T, S> = item type, status
@@ -948,6 +929,11 @@ public class GameState implements Comparable<GameState>
         public Tracker(Map<T, S> items)
         {
             this.items = items;
+        }
+
+        public Tracker(Tracker<T, S> tracker)
+        {
+            this.items = new HashMap<>(tracker.getItems());
         }
 
         public Tracker(Iterable<T> items, Iterable<S> statuses)
@@ -976,11 +962,6 @@ public class GameState implements Comparable<GameState>
             return getItems().containsValue(s);
         }
 
-        public boolean containsKey(T t)
-        {
-            return getItems().containsKey(t);
-        }
-
         public Map<T, S> getItems()
         {
             return items;
@@ -990,6 +971,23 @@ public class GameState implements Comparable<GameState>
         public String toString()
         {
             return "Tracker{" + "items=" + items + '}';
+        }
+
+        @Override
+        public boolean equals(Object o)
+        {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+            Tracker<?, ?> tracker = (Tracker<?, ?>) o;
+            return Objects.equals(getItems(), tracker.getItems());
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(getItems());
         }
     }
 
@@ -1060,6 +1058,23 @@ public class GameState implements Comparable<GameState>
         public Map<String, Criterion<T>> getCriteria()
         {
             return criteria;
+        }
+
+        @Override
+        public boolean equals(Object o)
+        {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+            Goal<?> goal = (Goal<?>) o;
+            return Objects.equals(getCriteria(), goal.getCriteria());
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(getCriteria());
         }
     }
 
@@ -1145,6 +1160,25 @@ public class GameState implements Comparable<GameState>
         public T getObjective()
         {
             return objective;
+        }
+
+        @Override
+        public boolean equals(Object o)
+        {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+            Criterion<?> criterion = (Criterion<?>) o;
+            return Objects.equals(getId(), criterion.getId()) && Objects.equals(
+                    getObjective(),
+                    criterion.getObjective());
+        }
+
+        @Override
+        public int hashCode()
+        {
+            return Objects.hash(getId(), getObjective());
         }
     }
 

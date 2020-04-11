@@ -9,16 +9,15 @@ import edu.cwru.sepia.environment.model.state.State;
 import java.io.*;
 import java.util.*;
 
-/**
+/*
  * Created by Devin on 3/15/15.
  */
+
 public class PlannerAgent extends Agent
 {
-
     final int requiredWood;
     final int requiredGold;
     final boolean buildPeasants;
-
     // Your PEAgent implementation. This prevents you from having to parse
     // the text file representation of your plan.
     PEAgent peAgent;
@@ -26,19 +25,15 @@ public class PlannerAgent extends Agent
     public PlannerAgent(int playernum, String[] params)
     {
         super(playernum);
-
         if (params.length < 3)
         {
             System.err.println(
                     "You must specify the required wood and gold amounts and "
                             + "whether peasants should be built");
         }
-
         requiredWood = Integer.parseInt(params[0]);
         requiredGold = Integer.parseInt(params[1]);
         buildPeasants = Boolean.parseBoolean(params[2]);
-
-
         System.out.println("required wood: " + requiredWood + " required " +
                                    "gold: " + requiredGold + " build " +
                                    "Peasants: " + buildPeasants);
@@ -48,7 +43,6 @@ public class PlannerAgent extends Agent
     public Map<Integer, Action> initialStep(State.StateView stateView,
                                             History.HistoryView historyView)
     {
-
         Stack<StripsAction> plan = AstarSearch(new GameState(stateView,
                                                              playernum,
                                                              requiredGold,
@@ -60,13 +54,10 @@ public class PlannerAgent extends Agent
             System.exit(1);
             return null;
         }
-
         // write the plan to a text file
         savePlan(plan);
-
         // Instantiates the PEAgent with the specified plan.
         peAgent = new PEAgent(playernum, plan);
-
         return peAgent.initialStep(stateView, historyView);
     }
 
@@ -79,7 +70,6 @@ public class PlannerAgent extends Agent
             System.err.println("Planning failed. No PEAgent initialized.");
             return null;
         }
-
         return peAgent.middleStep(stateView, historyView);
     }
 
@@ -87,22 +77,19 @@ public class PlannerAgent extends Agent
     public void terminalStep(State.StateView stateView,
                              History.HistoryView historyView)
     {
-
     }
 
     @Override
     public void savePlayerData(OutputStream outputStream)
     {
-
     }
 
     @Override
     public void loadPlayerData(InputStream inputStream)
     {
-
     }
 
-    /**
+    /*
      * Perform an A* search of the game graph. This should return your plan
      * as a stack of actions. This is essentially the same as your first
      * assignment. The implementations should be very similar. The difference
@@ -111,35 +98,21 @@ public class PlannerAgent extends Agent
      * @param startState The state which is being planned from
      * @return The plan or null if no plan is found.
      */
+
     private Stack<StripsAction> AstarSearch(GameState startState)
     {
-        // create the first GameState (probably the longest calculation of
-        // the entire program)
-        GameState parent = new GameState(startState);
-
-        // self ordering list (orders based on heuristic cost)
+        GameState parent = startState;
         PriorityQueue<GameState> frontier = new PriorityQueue<>();
-
-        // set of explored GameStates, should be O(1) lookup time.
         Set<GameState> explored = new HashSet<>();
-
-        // initialize startState heuristic and add to frontier
-        parent.setHeuristic();
         frontier.add(parent);
-
         boolean goalNotFound = true;
         while (!frontier.isEmpty() && goalNotFound)
         {
-            // grab cheapest state
             parent = frontier.poll();
-
             Set<GameState> children = parent.generateChildren();
             children.removeIf(explored::contains);
-
-            // generate all possible resulting states
             for (GameState child : children)
             {
-                child.setHeuristic();
                 if (child.isGoal())
                 {
                     parent = child;
@@ -152,26 +125,22 @@ public class PlannerAgent extends Agent
         }
         if (!goalNotFound)
             return generatePlan(parent);
-
         System.out.println("Error: unable to plan a path to goal!");
         return null;
     }
 
-    // loops through predecessors and extracts the DirectiveMap from each
-    // DeltaState
     private Stack<StripsAction> generatePlan(GameState parent)
     {
         Stack<StripsAction> plan = new Stack<>();
-        while (parent.getCameFrom() != null && parent.getActions() != null)
+        while (parent.getCameFrom() != null)
         {
-            plan.push(parent.getActions());
+            plan.push(parent.getCreationActions());
             parent = parent.getCameFrom();
         }
         return plan;
     }
 
-
-    /**
+    /*
      * This has been provided for you. Each strips action is converted to a
      * string with the toString method. This means each class implementing
      * the StripsAction interface should override toString. Your strips
@@ -182,6 +151,7 @@ public class PlannerAgent extends Agent
      *
      * @param plan Stack of Strips Actions that are written to the text file.
      */
+
     private void savePlan(Stack<StripsAction> plan)
     {
         if (plan == null)
@@ -189,19 +159,14 @@ public class PlannerAgent extends Agent
             System.err.println("Cannot save null plan");
             return;
         }
-
         File outputDir = new File("saves");
         outputDir.mkdirs();
-
         File outputFile = new File(outputDir, "plan.txt");
-
         PrintWriter outputWriter = null;
         try
         {
             outputFile.createNewFile();
-
             outputWriter = new PrintWriter(outputFile.getAbsolutePath());
-
             Stack<StripsAction> tempPlan = (Stack<StripsAction>) plan.clone();
             while (!tempPlan.isEmpty())
             {

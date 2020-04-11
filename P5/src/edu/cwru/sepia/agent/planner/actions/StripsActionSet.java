@@ -1,8 +1,9 @@
 package edu.cwru.sepia.agent.planner.actions;
 
+import edu.cwru.sepia.action.Action;
+import edu.cwru.sepia.action.ActionType;
 import edu.cwru.sepia.agent.planner.GameState;
 
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -15,22 +16,25 @@ public class StripsActionSet implements StripsAction
         this.actions = actions;
     }
 
+    public StripsActionSet(StripsActionSet stripsActionSet)
+    {
+        this(new HashSet<>(stripsActionSet.getActions()));
+    }
+
     public StripsActionSet()
     {
         this(new HashSet<>());
+    }
+
+    public StripsActionSet copy()
+    {
+        return new StripsActionSet(this);
     }
 
     @Override
     public boolean preconditionsMet(GameState state)
     {
         return getActions().stream().allMatch(a -> preconditionsMet(state));
-    }
-
-    public StripsActionSet getMetSubset(GameState state)
-    {
-        Set<StripsAction> preconditionsMet = new HashSet<>(getActions());
-        preconditionsMet.removeIf(a -> !preconditionsMet(state));
-        return new StripsActionSet(preconditionsMet);
     }
 
     @Override
@@ -43,11 +47,11 @@ public class StripsActionSet implements StripsAction
     }
 
     @Override
-    public EnumSet<StripsEnum> effects()
+    public Set<StripsAction> effects(GameState state)
     {
-        EnumSet<StripsEnum> effects = EnumSet.noneOf(StripsEnum.class);
+        Set<StripsAction> effects = new HashSet<>();
         getActions().stream()
-                    .map(StripsAction::effects)
+                    .map(a -> a.effects(state))
                     .forEach(effects::addAll);
         return effects;
     }
@@ -58,6 +62,24 @@ public class StripsActionSet implements StripsAction
         return getActions().stream()
                            .map(StripsAction::computeCostFactor)
                            .reduce((long) 0, Math::multiplyExact);
+    }
+
+    @Override
+    public Action getSepiaAction(int... actionComponents)
+    {
+        return null;
+    }
+
+    @Override
+    public ActionType getSepiaActionType()
+    {
+        return null;
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return getActions().hashCode();
     }
 
     public Set<StripsAction> getActions()

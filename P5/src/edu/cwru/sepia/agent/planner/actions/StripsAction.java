@@ -1,8 +1,10 @@
 package edu.cwru.sepia.agent.planner.actions;
 
+import edu.cwru.sepia.action.Action;
+import edu.cwru.sepia.action.ActionType;
 import edu.cwru.sepia.agent.planner.GameState;
 
-import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * A useful start of an interface representing strips actions. You may add
@@ -46,9 +48,13 @@ public interface StripsAction
      */
     public GameState apply(GameState state);
 
-    public EnumSet<StripsEnum> effects();
+    public Set<StripsAction> effects(GameState state);
 
     public long computeCostFactor();
+
+    public Action getSepiaAction(int ...actionComponents);
+
+    public ActionType getSepiaActionType();
 
     @Override
     public int hashCode();
